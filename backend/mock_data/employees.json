@@ -1,0 +1,26 @@
+[
+  {
+    "employee_name": "Alex Sharma",
+    "role": "Backend Engineer",
+    "department": "Engineering",
+    "joining_date": "2025-01-15",
+    "manager_name": "Ravi Kumar",
+    "work_mode": "hybrid"
+  },
+  {
+    "employee_name": "Priya Mehta",
+    "role": "Sales Executive",
+    "department": "Sales",
+    "joining_date": "2025-03-01",
+    "manager_name": "Neha Joshi",
+    "work_mode": "onsite"
+  },
+  {
+    "employee_name": "Rohan Das",
+    "role": "Frontend Engineer",
+    "department": "Engineering",
+    "joining_date": "2025-06-10",
+    "manager_name": "Ravi Kumar",
+    "work_mode": "remote"
+  }
+]

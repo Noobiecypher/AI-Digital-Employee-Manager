@@ -1,0 +1,20 @@
+[
+  {
+    "employee_name": "Alex Sharma",
+    "review_period": "Q1 2026",
+    "goals_set": ["Complete API redesign", "Reduce bug count by 20%", "Write unit tests for core modules"],
+    "goals_achieved": ["Complete API redesign", "Write unit tests for core modules"]
+  },
+  {
+    "employee_name": "Priya Mehta",
+    "review_period": "Q1 2026",
+    "goals_set": ["Close 15 deals", "Onboard 3 enterprise clients", "Achieve 90% CRM hygiene"],
+    "goals_achieved": ["Close 15 deals", "Achieve 90% CRM hygiene"]
+  },
+  {
+    "employee_name": "Rohan Das",
+    "review_period": "Q1 2026",
+    "goals_set": ["Migrate dashboard to React 18", "Improve page load time by 30%"],
+    "goals_achieved": ["Migrate dashboard to React 18"]
+  }
+]

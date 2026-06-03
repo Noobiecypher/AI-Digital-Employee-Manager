@@ -1,0 +1,14 @@
+[
+  {
+    "product_name": "WorkforceAI",
+    "description": "An AI-powered digital employee platform that automates HR, recruitment, sales, and reporting workflows using specialized AI agents.",
+    "pain_points": [
+      "slow and manual hiring process",
+      "lack of automated onboarding",
+      "no real-time performance visibility",
+      "sales outreach is time-consuming",
+      "reporting requires manual data gathering"
+    ],
+    "target_industries": ["SaaS", "IT Services", "Startups", "Enterprise"]
+  }
+]

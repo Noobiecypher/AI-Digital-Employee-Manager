@@ -1,0 +1,32 @@
+[
+  {
+    "name": "Ananya Rao",
+    "role_applied": "Backend Engineer",
+    "skills": ["Python", "FastAPI", "Docker", "PostgreSQL", "Redis"]
+  },
+  {
+    "name": "Karan Bose",
+    "role_applied": "Backend Engineer",
+    "skills": ["Python", "PostgreSQL", "Docker"]
+  },
+  {
+    "name": "Sneha Iyer",
+    "role_applied": "Backend Engineer",
+    "skills": ["Python", "FastAPI", "Redis"]
+  },
+  {
+    "name": "Mihir Patel",
+    "role_applied": "Frontend Engineer",
+    "skills": ["React", "TypeScript", "TailwindCSS", "HTML", "CSS"]
+  },
+  {
+    "name": "Divya Nair",
+    "role_applied": "Frontend Engineer",
+    "skills": ["React", "HTML", "CSS"]
+  },
+  {
+    "name": "Arjun Ghosh",
+    "role_applied": "Sales Executive",
+    "skills": ["CRM Tools", "Cold Outreach", "Excel"]
+  }
+]

@@ -1,0 +1,43 @@
+[
+  {
+    "department": "Engineering",
+    "location": "Bangalore",
+    "rating_scale": 5,
+    "roles": [
+      {
+        "role": "Backend Engineer",
+        "experience_years": 3,
+        "skills_required": ["Python", "PostgreSQL", "Docker", "FastAPI", "Redis"]
+      },
+      {
+        "role": "Frontend Engineer",
+        "experience_years": 2,
+        "skills_required": ["React", "TypeScript", "TailwindCSS", "HTML", "CSS"]
+      }
+    ]
+  },
+  {
+    "department": "Sales",
+    "location": "Mumbai",
+    "rating_scale": 5,
+    "roles": [
+      {
+        "role": "Sales Executive",
+        "experience_years": 2,
+        "skills_required": ["CRM Tools", "Cold Outreach", "Negotiation", "Excel"]
+      }
+    ]
+  },
+  {
+    "department": "HR",
+    "location": "Bangalore",
+    "rating_scale": 5,
+    "roles": [
+      {
+        "role": "HR Manager",
+        "experience_years": 4,
+        "skills_required": ["Recruitment", "Onboarding", "Policy Management", "HRMS Tools"]
+      }
+    ]
+  }
+]
