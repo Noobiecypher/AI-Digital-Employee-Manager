@@ -39,10 +39,12 @@ def get_role_info(department: str, role: str) -> dict:
             for r in dept["roles"]:
                 if r["role"].lower() == role.lower():
                     return {
-                        "experience_years": r["experience_years"],
-                        "skills_required": r["skills_required"],
-                        "location": dept["location"],
-                        "rating_scale": dept["rating_scale"],
+                        "experience_years":     r["experience_years"],
+                        "skills_required":      r["skills_required"],
+                        "location":             dept["location"],
+                        "rating_scale":         dept["rating_scale"],
+                        "salary_range":         r.get("salary_range", "To be decided"),
+                        "onboarding_checklist": r.get("onboarding_checklist", []),
                     }
             raise ValueError(f"Role '{role}' not found in department '{department}'")
     raise ValueError(f"Department '{department}' not found in departments.json")
