@@ -7,12 +7,34 @@
       {
         "role": "Backend Engineer",
         "experience_years": 3,
-        "skills_required": ["Python", "PostgreSQL", "Docker", "FastAPI", "Redis"]
+        "skills_required": ["Python", "PostgreSQL", "Docker", "FastAPI", "Redis"],
+        "salary_range": "12,00,000 - 15,00,000 INR per annum",
+        "onboarding_checklist": [
+          "Complete HR documentation and contracts",
+          "Laptop and dev environment setup",
+          "GitHub and Jira access provisioned",
+          "Meet your manager and buddy",
+          "Review system architecture and codebase",
+          "Attend engineering team standup",
+          "Complete company security and compliance training",
+          "Ship a small first task by end of week 2"
+        ]
       },
       {
         "role": "Frontend Engineer",
         "experience_years": 2,
-        "skills_required": ["React", "TypeScript", "TailwindCSS", "HTML", "CSS"]
+        "skills_required": ["React", "TypeScript", "TailwindCSS", "REST APIs"],
+        "salary_range": "10,00,000 - 13,00,000 INR per annum",
+        "onboarding_checklist": [
+          "Complete HR documentation and contracts",
+          "Laptop and dev environment setup",
+          "GitHub and Figma access provisioned",
+          "Meet your manager and buddy",
+          "Review UI component library and design system",
+          "Attend engineering team standup",
+          "Complete company security and compliance training",
+          "Ship a small UI fix by end of week 2"
+        ]
       }
     ]
   },
@@ -24,7 +46,17 @@
       {
         "role": "Sales Executive",
         "experience_years": 2,
-        "skills_required": ["CRM Tools", "Cold Outreach", "Negotiation", "Excel"]
+        "skills_required": ["CRM Tools", "Cold Outreach", "Negotiation", "Lead Generation"],
+        "salary_range": "8,00,000 - 11,00,000 INR per annum",
+        "onboarding_checklist": [
+          "Complete HR documentation and contracts",
+          "CRM tool access and training",
+          "Meet your manager and buddy",
+          "Review product pitch deck and demo",
+          "Shadow a senior sales call",
+          "Complete sales process and compliance training",
+          "Set first month targets with manager"
+        ]
       }
     ]
   },
@@ -34,9 +66,19 @@
     "rating_scale": 5,
     "roles": [
       {
-        "role": "HR Manager",
-        "experience_years": 4,
-        "skills_required": ["Recruitment", "Onboarding", "Policy Management", "HRMS Tools"]
+        "role": "HR Executive",
+        "experience_years": 2,
+        "skills_required": ["Recruitment", "Onboarding", "Employee Relations", "HRMS Tools"],
+        "salary_range": "7,00,000 - 9,00,000 INR per annum",
+        "onboarding_checklist": [
+          "Complete HR documentation and contracts",
+          "HRMS tool access and training",
+          "Meet your manager and buddy",
+          "Review HR policies and employee handbook",
+          "Attend ongoing recruitment calls",
+          "Complete compliance and data privacy training",
+          "Set first month goals with manager"
+        ]
       }
     ]
   }
