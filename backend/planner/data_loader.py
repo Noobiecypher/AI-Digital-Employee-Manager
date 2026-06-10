@@ -1,160 +1,268 @@
 import json
 import os
 
-# Path to mock data folder
-DATA_DIR = os.path.join(os.path.dirname(__file__), "mock_data")
+from models import (
+    HireEmployeeParams,
+    OnboardEmployeeParams,
+    SalesOutreachParams,
+    PerformanceReviewParams,
+)
 
+
+# ==========================================================
+# MOCK DATA LOCATION
+# ==========================================================
+
+DATA_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(__file__)),
+    "mock_data"
+)
+
+
+# ==========================================================
+# FILE HELPERS
+# ==========================================================
 
 def _load(filename: str) -> list[dict]:
-    """Load a JSON file from mock_data folder."""
-    with open(os.path.join(DATA_DIR, filename), "r") as f:
+    with open(
+        os.path.join(DATA_DIR, filename),
+        "r",
+        encoding="utf-8"
+    ) as f:
         return json.load(f)
 
 
-# ─────────────────────────────────────────
-# LOOKUP FUNCTIONS
-# ─────────────────────────────────────────
+def _save(filename: str, data: list[dict]) -> None:
+    with open(
+        os.path.join(DATA_DIR, filename),
+        "w",
+        encoding="utf-8"
+    ) as f:
+        json.dump(data, f, indent=2)
+
+
+# ==========================================================
+# READ FUNCTIONS
+# ==========================================================
 
 def get_employee(employee_name: str) -> dict:
-    """
-    Fetch employee record by name.
-    Raises ValueError if not found.
-    """
+
     employees = _load("employees.json")
+
     for emp in employees:
         if emp["employee_name"].lower() == employee_name.lower():
             return emp
-    raise ValueError(f"Employee '{employee_name}' not found in employees.json")
 
-
-def get_role_info(department: str, role: str) -> dict:
-    """
-    Fetch role-specific info (experience_years, skills_required)
-    from departments.json for a given department + role.
-    Raises ValueError if department or role not found.
-    """
-    departments = _load("departments.json")
-    for dept in departments:
-        if dept["department"].lower() == department.lower():
-            for r in dept["roles"]:
-                if r["role"].lower() == role.lower():
-                    return {
-                        "experience_years":     r["experience_years"],
-                        "skills_required":      r["skills_required"],
-                        "location":             dept["location"],
-                        "rating_scale":         dept["rating_scale"],
-                        "salary_range":         r.get("salary_range", "To be decided"),
-                        "onboarding_checklist": r.get("onboarding_checklist", []),
-                    }
-            raise ValueError(f"Role '{role}' not found in department '{department}'")
-    raise ValueError(f"Department '{department}' not found in departments.json")
-
-
-def get_goals(employee_name: str, review_period: str) -> dict:
-    """
-    Fetch goals for an employee in a specific review period.
-    Raises ValueError if not found.
-    """
-    goals = _load("goals.json")
-    for g in goals:
-        if (g["employee_name"].lower() == employee_name.lower()
-                and g["review_period"].lower() == review_period.lower()):
-            return {
-                "goals_set": g["goals_set"],
-                "goals_achieved": g["goals_achieved"],
-            }
     raise ValueError(
-        f"Goals for '{employee_name}' in period '{review_period}' not found in goals.json"
+        f"Employee '{employee_name}' not found"
+    )
+
+
+def get_role_info(
+    department: str,
+    role: str
+) -> dict:
+
+    departments = _load("departments.json")
+
+    for dept in departments:
+
+        if dept["department"].lower() == department.lower():
+
+            for r in dept["roles"]:
+
+                if r["role"].lower() == role.lower():
+
+                    return {
+                        "experience_years": r["experience_years"],
+                        "skills_required": r["skills_required"],
+                        "location": dept["location"],
+                        "rating_scale": dept["rating_scale"],
+                        "salary_range": r.get(
+                            "salary_range",
+                            "To be decided"
+                        ),
+                        "onboarding_checklist": r.get(
+                            "onboarding_checklist",
+                            []
+                        ),
+                    }
+
+    raise ValueError(
+        f"Role '{role}' not found"
+    )
+
+
+def get_goals(
+    employee_name: str,
+    review_period: str
+) -> dict:
+
+    goals = _load("goals.json")
+
+    for goal in goals:
+
+        if (
+            goal["employee_name"].lower()
+            == employee_name.lower()
+            and
+            goal["review_period"].lower()
+            == review_period.lower()
+        ):
+
+            return {
+                "goals_set": goal["goals_set"],
+                "goals_achieved": goal["goals_achieved"]
+            }
+
+    raise ValueError(
+        f"Goals not found for '{employee_name}'"
     )
 
 
 def get_product(product_name: str) -> dict:
-    """
-    Fetch product info by name.
-    Falls back to first product if name is empty.
-    Raises ValueError if not found.
-    """
+
     products = _load("products.json")
+
     if not product_name:
         return products[0]
-    for p in products:
-        if p["product_name"].lower() == product_name.lower():
-            return p
-    raise ValueError(f"Product '{product_name}' not found in products.json")
+
+    for product in products:
+
+        if (
+            product["product_name"].lower()
+            == product_name.lower()
+        ):
+            return product
+
+    raise ValueError(
+        f"Product '{product_name}' not found"
+    )
 
 
-# ─────────────────────────────────────────
+def get_candidates(role: str) -> list[dict]:
+
+    candidates = _load("candidates.json")
+
+    return [
+        candidate
+        for candidate in candidates
+        if candidate["role_applied"].lower()
+        == role.lower()
+    ]
+
+
+# ==========================================================
 # WRITE FUNCTIONS
-# These are called by Person 1/2 after
-# workflows complete — NOT by the Planner.
-# When a real DB is introduced, only the
-# internals of these functions change.
-# ─────────────────────────────────────────
-
-def _save(filename: str, data: list[dict]) -> None:
-    """Write updated data back to a JSON file."""
-    with open(os.path.join(DATA_DIR, filename), "w") as f:
-        json.dump(data, f, indent=2)
-
+# ==========================================================
 
 def add_employee(employee: dict) -> None:
-    """
-    Add a newly hired candidate to employees.json.
-    Called at the end of the hire_employee workflow
-    after offer is accepted and manager approves.
-
-    Expected fields in employee dict:
-      employee_name, role, department,
-      joining_date, manager_name, work_mode
-
-    Raises ValueError if employee already exists.
-    """
-    required_fields = ["employee_name", "role", "department",
-                       "joining_date", "manager_name", "work_mode"]
-    for field in required_fields:
-        if field not in employee:
-            raise ValueError(f"Missing required field '{field}' in employee data")
 
     employees = _load("employees.json")
 
-    # Check for duplicates
-    for emp in employees:
-        if emp["employee_name"].lower() == employee["employee_name"].lower():
-            raise ValueError(
-                f"Employee '{employee['employee_name']}' already exists in employees.json"
-            )
-
     employees.append(employee)
-    _save("employees.json", employees)
+
+    _save(
+        "employees.json",
+        employees
+    )
 
 
-def add_goals(goals: dict) -> None:
-    """
-    Add a new goals record for an employee and review period.
-    Called when a new review cycle begins and goals are set.
+# ==========================================================
+# PARAMETER ENRICHMENT
+# ==========================================================
 
-    Expected fields in goals dict:
-      employee_name, review_period, goals_set, goals_achieved
+def enrich_hire_params(
+    params: HireEmployeeParams
+) -> HireEmployeeParams:
 
-    Raises ValueError if record already exists for that
-    employee + review_period combination.
-    """
-    required_fields = ["employee_name", "review_period",
-                       "goals_set", "goals_achieved"]
-    for field in required_fields:
-        if field not in goals:
-            raise ValueError(f"Missing required field '{field}' in goals data")
+    role_info = get_role_info(
+        params.department,
+        params.role
+    )
 
-    all_goals = _load("goals.json")
+    params.experience_years = role_info[
+        "experience_years"
+    ]
 
-    # Check for duplicates
-    for g in all_goals:
-        if (g["employee_name"].lower() == goals["employee_name"].lower()
-                and g["review_period"].lower() == goals["review_period"].lower()):
-            raise ValueError(
-                f"Goals for '{goals['employee_name']}' in "
-                f"'{goals['review_period']}' already exist in goals.json"
-            )
+    params.skills_required = role_info[
+        "skills_required"
+    ]
 
-    all_goals.append(goals)
-    _save("goals.json", all_goals)
+    params.location = role_info[
+        "location"
+    ]
+
+    return params
+
+
+def enrich_onboard_params(
+    params: OnboardEmployeeParams
+) -> OnboardEmployeeParams:
+
+    employee = get_employee(
+        params.employee_name
+    )
+
+    params.role = employee["role"]
+    params.department = employee["department"]
+    params.joining_date = employee["joining_date"]
+    params.manager_name = employee["manager_name"]
+    params.work_mode = employee["work_mode"]
+
+    return params
+
+
+def enrich_sales_params(
+    params: SalesOutreachParams
+) -> SalesOutreachParams:
+
+    product = get_product(
+        params.product_name
+    )
+
+    params.product_name = product[
+        "product_name"
+    ]
+
+    params.pain_points = product[
+        "pain_points"
+    ]
+
+    return params
+
+
+def enrich_review_params(
+    params: PerformanceReviewParams
+) -> PerformanceReviewParams:
+
+    employee = get_employee(
+        params.employee_name
+    )
+
+    params.role = employee["role"]
+    params.department = employee["department"]
+
+    goals = get_goals(
+        params.employee_name,
+        params.review_period
+    )
+
+    params.goals_set = goals[
+        "goals_set"
+    ]
+
+    params.goals_achieved = goals[
+        "goals_achieved"
+    ]
+
+    role_info = get_role_info(
+        employee["department"],
+        employee["role"]
+    )
+
+    params.rating_scale = role_info[
+        "rating_scale"
+    ]
+
+    return params

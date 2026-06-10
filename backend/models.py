@@ -1,80 +1,206 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Union
 
 
-# ─────────────────────────────────────────
-# INPUT PARAM MODELS (one per objective)
-# ─────────────────────────────────────────
+# ==========================================================
+# INPUT PARAM MODELS
+# ==========================================================
 
 class HireEmployeeParams(BaseModel):
-    # Manager inputs
     role: str
     department: str
-    job_type: str                   # "full_time" | "part_time" | "contract"
-    # Fetched from departments.json
+    job_type: str
+
+    # Enriched from department/role data
     experience_years: int = 0
     skills_required: list[str] = []
     location: str = ""
 
 
 class OnboardEmployeeParams(BaseModel):
-    # Manager inputs
     employee_name: str
-    # Fetched from employees.json
+
+    # Enriched from employee data
     role: str = ""
     department: str = ""
     joining_date: str = ""
     manager_name: str = ""
-    work_mode: str = ""             # "remote" | "onsite" | "hybrid"
+    work_mode: str = ""
 
 
 class SalesOutreachParams(BaseModel):
-    # Manager inputs
     target_segment: str
-    outreach_channels: list[str]    # e.g. ["email", "linkedin"]
+    outreach_channels: list[str]
     campaign_goal: str
-    # Fetched from products.json
+
+    # Enriched from product data
     product_name: str = ""
     pain_points: list[str] = []
 
 
 class PerformanceReportParams(BaseModel):
-    # All manager inputs
     report_period: str
     departments: list[str]
     metrics_to_include: list[str]
-    report_type: str                # "executive_summary" | "detailed" | "kpi_dashboard"
+    report_type: str
 
 
 class PerformanceReviewParams(BaseModel):
-    # Manager inputs
     employee_name: str
     review_period: str
     manager_comments: str
-    # Fetched from employees.json
+
+    # Enriched from employee data
     role: str = ""
     department: str = ""
-    # Fetched from goals.json
+
+    # Enriched from goals data
     goals_set: list[str] = []
     goals_achieved: list[str] = []
-    # Fetched from departments.json
+
+    # Enriched from department data
     rating_scale: int = 5
 
 
 class MarketResearchParams(BaseModel):
-    # All manager inputs
     research_topic: str
     competitors: list[str]
     focus_areas: list[str]
-    output_format: str              # "bullet_summary" | "detailed_report" | "comparison_table"
+    output_format: str
+
+# ==========================================================
+# SHARED WORKFLOW OUTPUT MODELS
+# ==========================================================
+
+class Candidate(BaseModel):
+    name: str
+    skills: list[str] = []
+    experience_years: int = 0
+    match_score: float = 0.0
 
 
-# ─────────────────────────────────────────
-# TOP LEVEL PLANNER INPUT
-# ─────────────────────────────────────────
+# ==========================================================
+# HIRE EMPLOYEE OUTPUTS
+# ==========================================================
+
+class OfferDetails(BaseModel):
+    candidate_name: str
+    role: str
+    department: str
+    salary: int
+    location: str
+    job_type: str
+
+
+class InterviewSchedule(BaseModel):
+    candidate_name: str
+    interviewer: str
+    date: str
+    time: str
+
+
+# ==========================================================
+# ONBOARD EMPLOYEE OUTPUTS
+# ==========================================================
+
+class EmployeeDetails(BaseModel):
+    employee_id: str
+    name: str
+    role: str
+    department: str
+    manager_name: str
+
+
+class OnboardingPlan(BaseModel):
+    duration_days: int
+    milestones: list[str] = []
+
+
+class WelcomePackage(BaseModel):
+    documents: list[str] = []
+    resources: list[str] = []
+
+
+# ==========================================================
+# SALES OUTREACH OUTPUTS
+# ==========================================================
+
+class MarketData(BaseModel):
+    target_segment: str
+    pain_points: list[str] = []
+    market_trends: list[str] = []
+
+
+class CompetitorAnalysis(BaseModel):
+    competitors: list[str] = []
+    strengths: list[str] = []
+    weaknesses: list[str] = []
+
+
+class OutreachStrategy(BaseModel):
+    campaign_goal: str
+    channels: list[str] = []
+    key_messages: list[str] = []
+
+
+# ==========================================================
+# PERFORMANCE REPORT OUTPUTS
+# ==========================================================
+
+class HRMetrics(BaseModel):
+    metrics: dict = Field(default_factory=dict)
+
+
+class SalesMetrics(BaseModel):
+    metrics: dict = Field(default_factory=dict)
+
+
+class AggregatedMetrics(BaseModel):
+    hr_metrics: dict = Field(default_factory=dict)
+    sales_metrics: dict = Field(default_factory=dict)
+
+
+class KPIDashboard(BaseModel):
+    kpis: dict = Field(default_factory=dict)
+
+
+# ==========================================================
+# PERFORMANCE REVIEW OUTPUTS
+# ==========================================================
+
+class GoalData(BaseModel):
+    goals_set: list[str] = []
+    goals_achieved: list[str] = []
+
+
+class PerformanceEvaluation(BaseModel):
+    strengths: list[str] = []
+    weaknesses: list[str] = []
+    summary: str = ""
+
+
+# ==========================================================
+# MARKET RESEARCH OUTPUTS
+# ==========================================================
+
+class ResearchData(BaseModel):
+    topic: str
+    competitors: list[str] = []
+    focus_areas: list[str] = []
+
+
+class StructuredReport(BaseModel):
+    findings: list[str] = []
+    recommendations: list[str] = []
+    summary: str = ""
+
+# ==========================================================
+# PLANNER INPUT
+# ==========================================================
 
 class PlannerInput(BaseModel):
     objective_id: str
+
     params: Union[
         HireEmployeeParams,
         OnboardEmployeeParams,
@@ -85,16 +211,26 @@ class PlannerInput(BaseModel):
     ]
 
 
-# ─────────────────────────────────────────
-# PLANNER OUTPUT MODELS
-# ─────────────────────────────────────────
+# ==========================================================
+# TASK MODEL
+# ==========================================================
 
 class Task(BaseModel):
     task_id: str
-    agent: str                      # "hr" | "recruitment" | "sales" | "research" | "reporting"
-    action: str
-    depends_on: list[str]           # task_ids that must complete first, [] if no dependency
 
+    # recruitment | hr | sales | research | reporting | human
+    agent: str
+
+    # generate_job_description etc.
+    action: str
+
+    # Task IDs that must complete before this task can run
+    depends_on: list[str]
+
+
+# ==========================================================
+# PLANNER OUTPUT
+# ==========================================================
 
 class PlannerOutput(BaseModel):
     workflow_id: str
@@ -102,18 +238,17 @@ class PlannerOutput(BaseModel):
     tasks: list[Task]
 
 
-# ─────────────────────────────────────────
-# AGENT STATE
-# Shared state object passed through every
-# node in Person 1's LangGraph graph.
-# Every agent reads from and writes to this.
-# ─────────────────────────────────────────
+# ==========================================================
+# SHARED WORKFLOW STATE
+# Passed through all LangGraph nodes
+# ==========================================================
 
 class AgentState(BaseModel):
+
     workflow_id: str
     objective_id: str
 
-    # Full enriched params from Planner — agents read from this
+    # Fully enriched parameters
     params: Union[
         HireEmployeeParams,
         OnboardEmployeeParams,
@@ -123,21 +258,49 @@ class AgentState(BaseModel):
         MarketResearchParams,
     ]
 
-    # Full task list from Planner
+    # Complete workflow task list
     tasks: list[Task]
 
-    # task_id of the task currently being executed
+    # Current task being executed
     current_task_id: str = ""
 
-    # Completed task_ids
-    completed_tasks: list[str] = []
+    # Current agent executing
+    current_agent: str = ""
 
-    # Agent outputs keyed by task_id
-    # e.g. { "t1": { ...DraftJDOutput... }, "t2": { ...ShortlistOutput... } }
-    outputs: dict = {}
+    # Completed task IDs
+    completed_tasks: list[str] = Field(default_factory=list)
 
-    # Overall workflow status
-    status: str = "running"         # "running" | "paused" | "completed" | "failed"
+    # Outputs produced by agents
+    #
+    # Example:
+    # {
+    #     "t1": {...},
+    #     "t2": {...}
+    # }
+    outputs: dict[str, dict] = Field(default_factory=dict)
 
-    # Populated by Person 4's UI when manager approves/rejects
+    # Execution trace for debugging/auditing
+    #
+    # Example:
+    # [
+    #     {
+    #         "task_id": "t1",
+    #         "agent": "recruitment",
+    #         "status": "completed"
+    #     }
+    # ]
+    execution_log: list[dict] = Field(default_factory=list)
+
+    # running | paused | completed | failed
+    status: str = "running"
+
+    approval_status: str = "pending"
+    # pending | approved | rejected
+
+    awaiting_human_input: bool = False
+
+    # Manager approval/rejection comments
     human_feedback: str | None = None
+
+    # Failure reason if status == failed
+    error_message: str | None = None
