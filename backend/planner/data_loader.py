@@ -193,6 +193,10 @@ def enrich_hire_params(
         "location"
     ]
 
+    params.salary_range = role_info[
+        "salary_range"
+    ]
+
     return params
 
 

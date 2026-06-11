@@ -15,6 +15,7 @@ class HireEmployeeParams(BaseModel):
     experience_years: int = 0
     skills_required: list[str] = []
     location: str = ""
+    salary_range: str = ""
 
 
 class OnboardEmployeeParams(BaseModel):
@@ -109,6 +110,8 @@ class EmployeeDetails(BaseModel):
     role: str
     department: str
     manager_name: str
+    joining_date: str
+    work_mode: str
 
 
 class OnboardingPlan(BaseModel):

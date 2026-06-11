@@ -42,7 +42,7 @@ WORKFLOWS = {
 
         # Human-in-the-Loop Approval Gate
         # Approved -> continue workflow
-        # Rejected -> stop workflow
+        # Rejected -> fail workflow
 
         Task(
             task_id="t6",
@@ -183,7 +183,7 @@ WORKFLOWS = {
             task_id="t6",
             agent="reporting",
             action="generate_recommendations",
-            depends_on=["t5"]
+            depends_on=["t3","t5"]
         ),
     ],
 
@@ -228,7 +228,7 @@ WORKFLOWS = {
             task_id="t6",
             agent="reporting",
             action="generate_review_summary",
-            depends_on=["t5"]
+            depends_on=["t3","t4","t5"]
         ),
     ],
 

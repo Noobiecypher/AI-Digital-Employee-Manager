@@ -93,6 +93,7 @@ Filter candidates against role requirements.
 | required_skills  | outputs["t2"]   |
 | experience_years | state.params    |
 | candidates       | candidates.json |
+| role             | state.params    |
 
 ### Returns
 
@@ -141,6 +142,9 @@ Create interview schedule for shortlisted candidates.
 
 Prepare hiring offer for selected candidate.
 
+For MVP, the selected candidate is the candidate with the highest
+match_score from shortlisted_candidates.
+
 ### Reads
 
 | Field                  | Source        |
@@ -187,8 +191,26 @@ Human approval gate.
 
 ### Special Rule
 
-* Approved → Continue Workflow
-* Rejected → Stop Workflow
+Approved -> Continue Workflow
+
+Rejected -> Fail Workflow
+
+The Workflow Executor copies:
+
+outputs["t6"]["approval_status"]
+
+to:
+
+state.approval_status
+
+and updates workflow status accordingly.
+
+If approval_status == "approved":
+    continue workflow execution.
+
+If approval_status == "rejected":
+    set state.status = "failed"
+    and stop workflow execution.
 
 ### Consumed By
 
@@ -297,6 +319,9 @@ Create welcome package for new employee.
     "welcome_package": WelcomePackage
 }
 ```
+### Consumed By
+
+* t5 generate_summary
 
 ---
 
@@ -340,6 +365,7 @@ Generate onboarding summary.
 | employee_details | outputs["t1"] |
 | onboarding_plan  | outputs["t2"] |
 | first_week_tasks | outputs["t4"] |
+| welcome_package  | outputs["t3"] |
 
 ### Returns
 
@@ -389,9 +415,19 @@ Analyze competitor positioning.
 
 ### Reads
 
-| Field       | Source        |
-| ----------- | ------------- |
-| market_data | outputs["t1"] |
+| Field          | Source        |
+| -------------- | ------------- |
+| market_data    | outputs["t1"] |
+| target_segment | state.params  |
+| product_name   | state.params  |
+
+### Note
+
+For MVP, competitors may be inferred from
+market_data, target_segment, and product context.
+No separate competitor dataset is required.
+
+
 
 ### Returns
 
@@ -702,6 +738,7 @@ Generate outreach campaign summary.
 
 * t4 generate_rating
 * t5 generate_improvement_plan
+* t6 generate_review_summary
 
 ---
 
@@ -751,7 +788,7 @@ Generate outreach campaign summary.
 ## t6 - generate_review_summary
 
 ### Reads
-
+* performance_evaluation
 * rating
 * improvement_plan
 
