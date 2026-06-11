@@ -212,6 +212,8 @@ If approval_status == "rejected":
     set state.status = "failed"
     and stop workflow execution.
 
+
+
 ### Consumed By
 
 * t7 generate_hiring_summary
