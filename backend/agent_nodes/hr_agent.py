@@ -1,492 +1,513 @@
-import os
-import sys
-import json
-from datetime import date, timedelta
-import anthropic
-from pydantic import BaseModel
+"""
+hr_agent.py
+-----------
+HR Agent for the AI Digital Employee Platform.
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+Handles:
+    onboard_employee workflow  : t1, t2, t3, t4
+    performance_review workflow: t1, t2, t3, t4, t5
+
+Inherits BaseAgent. Workflow Executor calls agent.run(task, state).
+Returns output dict per task_contracts.md. Never mutates AgentState directly.
+
+Requirements:
+    pip install langchain langchain-ollama
+    Ollama running locally: ollama serve
+"""
+
+from base_agent import BaseAgent
 from models import (
     AgentState,
-    HireEmployeeParams,
+    Task,
+    EmployeeDetails,
+    OnboardingPlan,
+    WelcomePackage,
+    GoalData,
+    PerformanceEvaluation,
     OnboardEmployeeParams,
-    PerformanceReportParams,
     PerformanceReviewParams,
 )
-from data_loader import _load, get_role_info
+from data_loader import get_employee, get_role_info
+from core.llm import llm
 
 
-# ─────────────────────────────────────────
-# OUTPUT SCHEMAS
-# ─────────────────────────────────────────
+class HRAgent(BaseAgent):
 
-class SendOfferOutput(BaseModel):
-    candidate_name: str
-    role: str
-    offer_letter: str
-    offered_salary_range: str
-    joining_date_proposed: str          # YYYY-MM-DD
+    def __init__(self) -> None:
+        super().__init__("hr")
 
+    # ----------------------------------------------------------
+    # DISPATCH
+    # ----------------------------------------------------------
 
-class OnboardEmployeeOutput(BaseModel):
-    employee_name: str
-    checklist: list[str]
-    welcome_email: str
-    buddy_assigned: str
-    tools_to_provision: list[str]
+    def execute(self, task: Task, state: AgentState) -> dict:
 
+        handlers = {
+            # onboard_employee
+            "retrieve_employee_details": self._retrieve_employee_details,
+            "generate_onboarding_plan":  self._generate_onboarding_plan,
+            "create_welcome_package":    self._create_welcome_package,
+            "create_first_week_tasks":   self._create_first_week_tasks,
 
-class DepartmentHRData(BaseModel):
-    department: str
-    headcount: int
-    attrition_count: int
+            # performance_review
+            "retrieve_employee_data":    self._retrieve_employee_data,
+            "retrieve_goal_data":        self._retrieve_goal_data,
+            "evaluate_performance":      self._evaluate_performance,
+            "generate_rating":           self._generate_rating,
+            "generate_improvement_plan": self._generate_improvement_plan,
+        }
 
+        handler = handlers.get(task.action)
 
-class CompileHRDataOutput(BaseModel):
-    report_period: str
-    departments_data: list[DepartmentHRData]
-    total_headcount: int
-    total_attrition: int
+        if not handler:
+            raise NotImplementedError(
+                f"HRAgent: unknown action '{task.action}'"
+            )
 
+        return handler(task, state)
 
-class PerformanceReviewOutput(BaseModel):
-    employee_name: str
-    role: str
-    review_period: str
-    review_summary: str
-    goals_completion_rate: float
-    rating_given: float
-    strengths: list[str]
-    improvements: list[str]
-    recommended_action: str             # "promote" | "retain" | "pip"
+    # ==========================================================
+    # ONBOARD EMPLOYEE
+    # ==========================================================
 
+    # ----------------------------------------------------------
+    # t1 — retrieve_employee_details
+    # Reads: state.params.employee_name
+    # Returns: { "employee_details": EmployeeDetails }
+    # ----------------------------------------------------------
 
-class HRAgentOutput(BaseModel):
-    task_id: str
-    action: str
-    status: str                         # "completed" | "failed" | "needs_approval"
-    result: (
-        SendOfferOutput       |
-        OnboardEmployeeOutput |
-        CompileHRDataOutput   |
-        PerformanceReviewOutput
-    )
+    def _retrieve_employee_details(
+        self, task: Task, state: AgentState
+    ) -> dict:
 
+        params: OnboardEmployeeParams = state.params
+        raw = get_employee(params.employee_name)
 
-# ─────────────────────────────────────────
-# CLAUDE CLIENT
-# Only used by performance_review
-# ─────────────────────────────────────────
-
-client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
-MODEL  = "claude-sonnet-4-20250514"
-
-
-def _call_claude(system_prompt: str, user_prompt: str) -> str:
-    response = client.messages.create(
-        model=MODEL,
-        max_tokens=1000,
-        system=system_prompt,
-        messages=[{"role": "user", "content": user_prompt}]
-    )
-    return response.content[0].text
-
-
-def _parse_json(raw: str) -> dict:
-    cleaned = raw.strip()
-    if cleaned.startswith("```"):
-        cleaned = cleaned.split("```")[1]
-        if cleaned.startswith("json"):
-            cleaned = cleaned[4:]
-    return json.loads(cleaned.strip())
-
-
-def _get_current_task(state: AgentState):
-    for task in state.tasks:
-        if task.task_id == state.current_task_id:
-            return task
-    raise ValueError(f"Task '{state.current_task_id}' not found in state.tasks")
-
-
-# ─────────────────────────────────────────
-# TEMPLATES
-# ─────────────────────────────────────────
-
-OFFER_LETTER_TEMPLATE = """
-Dear {candidate_name},
-
-We are delighted to offer you the position of {role} at WorkforceAI, 
-within our {department} department based in {location}.
-
-After careful consideration, we are pleased to extend this offer with 
-the following details:
-
-  Position   : {role}
-  Department : {department}
-  Location   : {location}
-  Employment : {job_type}
-  Salary     : {salary_range}
-  Joining    : {joining_date}
-
-Please confirm your acceptance of this offer within 5 working days by 
-replying to this letter. We will follow up with your formal contract, 
-onboarding details, and next steps shortly after.
-
-We are excited to have you join our team and look forward to working 
-with you.
-
-Warm regards,
-HR Team
-WorkforceAI
-""".strip()
-
-WELCOME_EMAIL_TEMPLATE = """
-Subject: Welcome to WorkforceAI, {employee_name}!
-
-Dear {employee_name},
-
-We are thrilled to welcome you to WorkforceAI as our new {role} 
-in the {department} department!
-
-Your journey begins on {joining_date}. Here are a few things to 
-know before you start:
-
-  Manager : {manager_name}
-  Buddy   : {buddy}
-  Mode    : {work_mode}
-
-Your buddy {buddy} will be your go-to person for any questions 
-during your first few weeks. Your manager {manager_name} will 
-connect with you on Day 1 to walk you through your role and goals.
-
-Please find your onboarding checklist attached. We recommend 
-completing it in order during your first two weeks.
-
-We are so glad to have you on board!
-
-Warm regards,
-HR Team
-WorkforceAI
-""".strip()
-
-# Tools provisioned based on work mode
-TOOLS_BY_MODE = {
-    "remote":  ["Slack", "Zoom", "Jira", "GitHub", "Notion", "VPN Access"],
-    "onsite":  ["Slack", "Jira", "GitHub", "Office Access Card", "Laptop Setup"],
-    "hybrid":  ["Slack", "Zoom", "Jira", "GitHub", "Notion", "VPN Access", "Office Access Card"],
-}
-
-
-# ─────────────────────────────────────────
-# ACTION 1 — SEND OFFER
-# Pure Python + template — no Claude needed
-# Triggered by: hire_employee objective
-# ─────────────────────────────────────────
-
-def send_offer(state: AgentState) -> AgentState:
-    """
-    Reads:  state.params → role, department, location, job_type
-            state.outputs[t2] → shortlisted candidates (recruitment agent)
-            departments.json  → salary_range for the role
-    Writes: state.outputs[task_id] → HRAgentOutput(SendOfferOutput)
-            state.completed_tasks
-            state.status → "paused" (needs manager approval before sending)
-    """
-    task   = _get_current_task(state)
-    params = state.params
-
-    if not isinstance(params, HireEmployeeParams):
-        raise ValueError("send_offer requires HireEmployeeParams")
-
-    # Read top candidate from shortlist output (t2)
-    shortlist_task_id = task.depends_on[0]
-    shortlist_output  = state.outputs.get(shortlist_task_id, {})
-    shortlisted       = shortlist_output.get("result", {}).get("shortlisted", [])
-
-    if not shortlisted:
-        output = HRAgentOutput(
-            task_id=task.task_id,
-            action="send_offer",
-            status="failed",
-            result=SendOfferOutput(
-                candidate_name="N/A",
-                role=params.role,
-                offer_letter="No candidates available for offer.",
-                offered_salary_range="N/A",
-                joining_date_proposed="N/A",
-            ),
+        employee = EmployeeDetails(
+            employee_id  = raw.get("employee_id", ""),
+            name         = raw["employee_name"],
+            role         = raw["role"],
+            department   = raw["department"],
+            manager_name = raw["manager_name"],
+            joining_date = raw["joining_date"],
+            work_mode    = raw["work_mode"],
         )
-        state.outputs[task.task_id] = output.model_dump()
-        state.completed_tasks.append(task.task_id)
-        state.status = "failed"
-        return state
 
-    # Top candidate = highest match score (already sorted by recruitment agent)
-    top_candidate  = shortlisted[0]["name"]
+        return {"employee_details": employee.model_dump()}
 
-    # Fetch salary range from departments.json
-    role_info      = get_role_info(params.department, params.role)
-    salary_range   = role_info["salary_range"]
+    # ----------------------------------------------------------
+    # t2 — generate_onboarding_plan
+    # Reads: outputs["t1"] (employee_details)
+    # Returns: { "onboarding_plan": OnboardingPlan }
+    # ----------------------------------------------------------
 
-    # Joining date = 30 days from today
-    joining_date   = (date.today() + timedelta(days=30)).strftime("%Y-%m-%d")
+    def _generate_onboarding_plan(
+        self, task: Task, state: AgentState
+    ) -> dict:
 
-    offer_letter   = OFFER_LETTER_TEMPLATE.format(
-        candidate_name = top_candidate,
-        role           = params.role,
-        department     = params.department,
-        location       = params.location,
-        job_type       = params.job_type.replace("_", " ").title(),
-        salary_range   = salary_range,
-        joining_date   = joining_date,
-    )
+        emp = self.get_output(state, "t1")["employee_details"]
 
-    result = SendOfferOutput(
-        candidate_name        = top_candidate,
-        role                  = params.role,
-        offer_letter          = offer_letter,
-        offered_salary_range  = salary_range,
-        joining_date_proposed = joining_date,
-    )
+        prompt = f"""
+You are an HR onboarding specialist. Create a structured onboarding plan.
 
-    output = HRAgentOutput(
-        task_id=task.task_id,
-        action="send_offer",
-        status="needs_approval",
-        result=result,
-    )
+Employee  : {emp["name"]}
+Role      : {emp["role"]}
+Department: {emp["department"]}
+Manager   : {emp["manager_name"]}
+Work Mode : {emp["work_mode"]}
+Start Date: {emp["joining_date"]}
 
-    state.outputs[task.task_id] = output.model_dump()
-    state.completed_tasks.append(task.task_id)
-    state.status = "paused"
+Return the plan in this exact format:
 
-    return state
+DURATION_DAYS: <number>
 
+MILESTONES:
+- <milestone 1>
+- <milestone 2>
+- <milestone 3>
+- <milestone 4>
+- <milestone 5>
 
-# ─────────────────────────────────────────
-# ACTION 2 — ONBOARD EMPLOYEE
-# Pure Python + templates — no Claude needed
-# Triggered by: onboard_employee objective
-# ─────────────────────────────────────────
+Keep milestones concise and actionable. No extra text.
+"""
 
-def onboard_employee(state: AgentState) -> AgentState:
-    """
-    Reads:  state.params → employee_name, role, department,
-                           joining_date, manager_name, work_mode
-            departments.json → onboarding_checklist for the role
-            employees.json   → buddy (first colleague in same department)
-    Writes: state.outputs[task_id] → HRAgentOutput(OnboardEmployeeOutput)
-            state.completed_tasks
-    """
-    task   = _get_current_task(state)
-    params = state.params
+        response = llm.invoke(prompt)
+        content  = response.content.strip()
 
-    if not isinstance(params, OnboardEmployeeParams):
-        raise ValueError("onboard_employee requires OnboardEmployeeParams")
+        # Parse duration
+        duration_days = 30  # default
+        for line in content.split("\n"):
+            if "DURATION_DAYS:" in line:
+                try:
+                    duration_days = int(line.split(":")[-1].strip())
+                except ValueError:
+                    pass
+                break
 
-    # Fetch role-specific onboarding checklist
-    role_info = get_role_info(params.department, params.role)
-    checklist = role_info["onboarding_checklist"]
+        # Parse milestones
+        milestones = []
+        in_milestones = False
+        for line in content.split("\n"):
+            if "MILESTONES:" in line:
+                in_milestones = True
+                continue
+            if in_milestones and line.strip().startswith("-"):
+                milestones.append(line.strip("- ").strip())
 
-    # Tools based on work mode
-    tools = TOOLS_BY_MODE.get(params.work_mode, TOOLS_BY_MODE["hybrid"])
+        plan = OnboardingPlan(
+            duration_days = duration_days,
+            milestones    = milestones,
+        )
 
-    # Assign buddy — first employee in same department (excluding new employee)
-    all_employees = _load("employees.json")
-    buddy = next(
-        (e["employee_name"] for e in all_employees
-         if e["department"] == params.department
-         and e["employee_name"] != params.employee_name),
-        "To be assigned"
-    )
+        return {"onboarding_plan": plan.model_dump()}
 
-    welcome_email = WELCOME_EMAIL_TEMPLATE.format(
-        employee_name = params.employee_name,
-        role          = params.role,
-        department    = params.department,
-        joining_date  = params.joining_date,
-        manager_name  = params.manager_name,
-        buddy         = buddy,
-        work_mode     = params.work_mode.title(),
-    )
+    # ----------------------------------------------------------
+    # t3 — create_welcome_package
+    # Reads: outputs["t1"] (employee_details), outputs["t2"] (onboarding_plan)
+    # Returns: { "welcome_package": WelcomePackage }
+    # ----------------------------------------------------------
 
-    result = OnboardEmployeeOutput(
-        employee_name      = params.employee_name,
-        checklist          = checklist,
-        welcome_email      = welcome_email,
-        buddy_assigned     = buddy,
-        tools_to_provision = tools,
-    )
+    def _create_welcome_package(
+        self, task: Task, state: AgentState
+    ) -> dict:
 
-    output = HRAgentOutput(
-        task_id=task.task_id,
-        action="onboard_employee",
-        status="completed",
-        result=result,
-    )
+        emp  = self.get_output(state, "t1")["employee_details"]
+        plan = self.get_output(state, "t2")["onboarding_plan"]
 
-    state.outputs[task.task_id] = output.model_dump()
-    state.completed_tasks.append(task.task_id)
+        prompt = f"""
+You are an HR coordinator. Generate a welcome package for a new employee.
 
-    return state
+Employee  : {emp["name"]}
+Role      : {emp["role"]}
+Department: {emp["department"]}
+Manager   : {emp["manager_name"]}
+Work Mode : {emp["work_mode"]}
+Milestones: {plan["milestones"]}
 
+Return in this exact format:
 
-# ─────────────────────────────────────────
-# ACTION 3 — COMPILE HR DATA
-# Pure Python — no Claude needed
-# Triggered by: performance_report objective
-# ─────────────────────────────────────────
+DOCUMENTS:
+- <document 1>
+- <document 2>
+- <document 3>
+- <document 4>
+- <document 5>
 
-def compile_hr_data(state: AgentState) -> AgentState:
-    """
-    Reads:  state.params → departments, report_period
-            employees.json → headcount and attrition per department
-    Writes: state.outputs[task_id] → HRAgentOutput(CompileHRDataOutput)
-            state.completed_tasks
-    """
-    task   = _get_current_task(state)
-    params = state.params
+RESOURCES:
+- <resource 1>
+- <resource 2>
+- <resource 3>
+- <resource 4>
 
-    if not isinstance(params, PerformanceReportParams):
-        raise ValueError("compile_hr_data requires PerformanceReportParams")
+No extra text. Only the two sections above.
+"""
 
-    all_employees = _load("employees.json")
-    one_year_ago  = date.today() - timedelta(days=365)
+        response = llm.invoke(prompt)
+        content  = response.content.strip()
 
-    departments_data = []
-    total_headcount  = 0
-    total_attrition  = 0
+        documents = []
+        resources = []
 
-    for dept_name in params.departments:
-        dept_employees = [
-            e for e in all_employees
-            if e["department"].lower() == dept_name.lower()
+        in_docs = False
+        in_res  = False
+
+        for line in content.split("\n"):
+            if "DOCUMENTS:" in line:
+                in_docs = True
+                in_res  = False
+                continue
+            if "RESOURCES:" in line:
+                in_res  = True
+                in_docs = False
+                continue
+            if line.strip().startswith("-"):
+                item = line.strip("- ").strip()
+                if in_docs:
+                    documents.append(item)
+                elif in_res:
+                    resources.append(item)
+
+        package = WelcomePackage(
+            documents = documents,
+            resources = resources,
+        )
+
+        return {"welcome_package": package.model_dump()}
+
+    # ----------------------------------------------------------
+    # t4 — create_first_week_tasks
+    # Reads: outputs["t1"] (employee_details), outputs["t2"] (onboarding_plan)
+    # Returns: { "first_week_tasks": list[str] }
+    # ----------------------------------------------------------
+
+    def _create_first_week_tasks(
+        self, task: Task, state: AgentState
+    ) -> dict:
+
+        emp  = self.get_output(state, "t1")["employee_details"]
+        plan = self.get_output(state, "t2")["onboarding_plan"]
+
+        prompt = f"""
+You are an HR specialist. Generate first week tasks for a new employee.
+
+Employee  : {emp["name"]}
+Role      : {emp["role"]}
+Department: {emp["department"]}
+Work Mode : {emp["work_mode"]}
+Milestones: {plan["milestones"]}
+
+Return ONLY a flat list of tasks for the first week, one per line:
+- <task 1>
+- <task 2>
+- <task 3>
+...
+
+Keep tasks specific and actionable. No day headings. No extra text.
+"""
+
+        response = llm.invoke(prompt)
+        content  = response.content.strip()
+
+        tasks = [
+            line.strip("•-* ").strip()
+            for line in content.split("\n")
+            if line.strip().startswith("-") or line.strip().startswith("•")
         ]
-        headcount = len(dept_employees)
-        attrition = sum(
-            1 for e in dept_employees
-            if date.fromisoformat(e["joining_date"]) < one_year_ago
+
+        return {"first_week_tasks": tasks}
+
+    # ==========================================================
+    # PERFORMANCE REVIEW
+    # ==========================================================
+
+    # ----------------------------------------------------------
+    # t1 — retrieve_employee_data
+    # Reads: state.params (employee_name, review_period)
+    # Returns: { "employee_data": EmployeeDetails }
+    # ----------------------------------------------------------
+
+    def _retrieve_employee_data(
+        self, task: Task, state: AgentState
+    ) -> dict:
+
+        params: PerformanceReviewParams = state.params
+        raw       = get_employee(params.employee_name)
+        role_info = get_role_info(raw["department"], raw["role"])
+
+        # Write rating_scale back into params so downstream tasks can read it
+        # This is the only case where we update params — it's an enrichment
+        # that belongs in params, not in outputs.
+        state.params.rating_scale = role_info["rating_scale"]
+
+        employee = EmployeeDetails(
+            employee_id  = raw.get("employee_id", ""),
+            name         = raw["employee_name"],
+            role         = raw["role"],
+            department   = raw["department"],
+            manager_name = raw["manager_name"],
+            joining_date = raw["joining_date"],
+            work_mode    = raw["work_mode"],
         )
 
-        departments_data.append(DepartmentHRData(
-            department=dept_name,
-            headcount=headcount,
-            attrition_count=attrition,
-        ))
+        return {"employee_data": employee.model_dump()}
 
-        total_headcount += headcount
-        total_attrition += attrition
+    # ----------------------------------------------------------
+    # t2 — retrieve_goal_data
+    # Reads: state.params (goals_set, goals_achieved) — enriched before workflow
+    # Returns: { "goal_data": GoalData }
+    # ----------------------------------------------------------
 
-    result = CompileHRDataOutput(
-        report_period    = params.report_period,
-        departments_data = departments_data,
-        total_headcount  = total_headcount,
-        total_attrition  = total_attrition,
-    )
+    def _retrieve_goal_data(
+        self, task: Task, state: AgentState
+    ) -> dict:
 
-    output = HRAgentOutput(
-        task_id=task.task_id,
-        action="compile_hr_data",
-        status="completed",
-        result=result,
-    )
+        params: PerformanceReviewParams = state.params
 
-    state.outputs[task.task_id] = output.model_dump()
-    state.completed_tasks.append(task.task_id)
+        goal_data = GoalData(
+            goals_set      = params.goals_set,
+            goals_achieved = params.goals_achieved,
+        )
 
-    return state
+        return {"goal_data": goal_data.model_dump()}
 
+    # ----------------------------------------------------------
+    # t3 — evaluate_performance
+    # Reads: outputs["t1"] (employee_data), outputs["t2"] (goal_data),
+    #        state.params.manager_comments
+    # Returns: { "performance_evaluation": PerformanceEvaluation }
+    # ----------------------------------------------------------
 
-# ─────────────────────────────────────────
-# ACTION 4 — PERFORMANCE REVIEW
-# Uses Claude — only action that needs it
-# Triggered by: performance_review objective
-# ─────────────────────────────────────────
+    def _evaluate_performance(
+        self, task: Task, state: AgentState
+    ) -> dict:
 
-def performance_review(state: AgentState) -> AgentState:
-    """
-    Reads:  state.params → employee_name, role, department,
-                           goals_set, goals_achieved, manager_comments,
-                           rating_scale, review_period
-    Writes: state.outputs[task_id] → HRAgentOutput(PerformanceReviewOutput)
-            state.completed_tasks
-            state.status → "paused" (needs manager approval before sharing)
-    """
-    task   = _get_current_task(state)
-    params = state.params
+        emp       = self.get_output(state, "t1")["employee_data"]
+        goal_data = self.get_output(state, "t2")["goal_data"]
+        params: PerformanceReviewParams = state.params
 
-    if not isinstance(params, PerformanceReviewParams):
-        raise ValueError("performance_review requires PerformanceReviewParams")
+        goals_set      = goal_data["goals_set"]
+        goals_achieved = goal_data["goals_achieved"]
+        achievement    = (
+            len(goals_achieved) / len(goals_set)
+            if goals_set else 0.0
+        )
 
-    # Compute in Python — never let Claude decide this
-    goals_completion_rate = (
-        round(len(params.goals_achieved) / len(params.goals_set), 2)
-        if params.goals_set else 0.0
-    )
+        prompt = f"""
+You are a senior HR performance evaluator. Evaluate the employee objectively.
 
-    system_prompt = """
-You are a senior HR manager writing an official employee performance review.
-You must respond ONLY with a valid JSON object — no explanation, no markdown, no preamble.
-The JSON must exactly match this structure:
-{
-  "review_summary": "<2-3 paragraph written review>",
-  "rating_given": <float e.g. 4.2>,
-  "strengths": ["strength1", "strength2", "strength3"],
-  "improvements": ["area1", "area2"],
-  "recommended_action": "<promote|retain|pip>"
-}
-Be professional, fair, and constructive.
-recommended_action must be exactly one of: promote, retain, pip
-pip means Performance Improvement Plan — only use if performance is clearly poor.
-"""
-
-    user_prompt = f"""
-Write a performance review for:
-
-Name            : {params.employee_name}
-Role            : {params.role}
-Department      : {params.department}
-Review Period   : {params.review_period}
-Rating Scale    : out of {params.rating_scale}
-
-Goals Set       : {params.goals_set}
-Goals Achieved  : {params.goals_achieved}
-Completion Rate : {goals_completion_rate * 100:.0f}%
-
+Employee        : {emp["name"]}
+Role            : {emp["role"]}
+Department      : {emp["department"]}
 Manager Comments: {params.manager_comments}
+Goals Set       : {goals_set}
+Goals Achieved  : {goals_achieved}
+Achievement Rate: {achievement * 100:.0f}%
 
-Based on the above, generate:
-- A 2-3 paragraph professional review summary
-- 2-3 strengths
-- 1-2 areas for improvement
-- A fair numeric rating out of {params.rating_scale}
-- recommended_action: promote, retain, or pip
+Return in this exact format:
+
+SUMMARY:
+<2-3 sentence overall performance summary>
+
+STRENGTHS:
+- <strength 1>
+- <strength 2>
+- <strength 3>
+
+WEAKNESSES:
+- <weakness 1>
+- <weakness 2>
+
+No extra text outside these three sections.
 """
 
-    raw    = _call_claude(system_prompt, user_prompt)
-    parsed = _parse_json(raw)
+        response = llm.invoke(prompt)
+        content  = response.content.strip()
 
-    result = PerformanceReviewOutput(
-        employee_name         = params.employee_name,
-        role                  = params.role,
-        review_period         = params.review_period,
-        goals_completion_rate = goals_completion_rate,  # always from Python
-        review_summary        = parsed["review_summary"],
-        rating_given          = parsed["rating_given"],
-        strengths             = parsed["strengths"],
-        improvements          = parsed["improvements"],
-        recommended_action    = parsed["recommended_action"],
-    )
+        summary    = ""
+        strengths  = []
+        weaknesses = []
 
-    output = HRAgentOutput(
-        task_id=task.task_id,
-        action="performance_review",
-        status="needs_approval",
-        result=result,
-    )
+        in_summary    = False
+        in_strengths  = False
+        in_weaknesses = False
 
-    state.outputs[task.task_id] = output.model_dump()
-    state.completed_tasks.append(task.task_id)
-    state.status = "paused"
+        for line in content.split("\n"):
+            line_stripped = line.strip()
 
-    return state
+            if "SUMMARY:" in line:
+                in_summary    = True
+                in_strengths  = False
+                in_weaknesses = False
+                continue
+            if "STRENGTHS:" in line:
+                in_summary    = False
+                in_strengths  = True
+                in_weaknesses = False
+                continue
+            if "WEAKNESSES:" in line:
+                in_summary    = False
+                in_strengths  = False
+                in_weaknesses = True
+                continue
+
+            if in_summary and line_stripped:
+                summary += line_stripped + " "
+            elif in_strengths and line_stripped.startswith("-"):
+                strengths.append(line_stripped.lstrip("- ").strip())
+            elif in_weaknesses and line_stripped.startswith("-"):
+                weaknesses.append(line_stripped.lstrip("- ").strip())
+
+        evaluation = PerformanceEvaluation(
+            strengths  = strengths,
+            weaknesses = weaknesses,
+            summary    = summary.strip(),
+        )
+
+        return {"performance_evaluation": evaluation.model_dump()}
+
+    # ----------------------------------------------------------
+    # t4 — generate_rating
+    # Reads: outputs["t3"] (performance_evaluation), state.params.rating_scale
+    # Returns: { "rating": int }
+    # Pure logic — no LLM needed.
+    # ----------------------------------------------------------
+
+    def _generate_rating(
+        self, task: Task, state: AgentState
+    ) -> dict:
+
+        params: PerformanceReviewParams = state.params
+        goal_data  = self.get_output(state, "t2")["goal_data"]
+        evaluation = self.get_output(state, "t3")["performance_evaluation"]
+
+        rating_scale   = params.rating_scale
+        goals_set      = goal_data["goals_set"]
+        goals_achieved = goal_data["goals_achieved"]
+
+        achievement_ratio = (
+            len(goals_achieved) / len(goals_set)
+            if goals_set else 0.0
+        )
+
+        # Qualitative weight from summary sentiment
+        summary = evaluation["summary"].lower()
+        if any(w in summary for w in ["excellent", "outstanding", "exceeds"]):
+            qualitative = 1.0
+        elif any(w in summary for w in ["good", "meets", "solid"]):
+            qualitative = 0.75
+        else:
+            qualitative = 0.5
+
+        # 70% goal completion, 30% qualitative assessment
+        raw_score    = (0.7 * achievement_ratio + 0.3 * qualitative) * rating_scale
+        final_rating = max(1, min(round(raw_score), rating_scale))
+
+        return {"rating": final_rating}
+
+    # ----------------------------------------------------------
+    # t5 — generate_improvement_plan
+    # Reads: outputs["t3"] (performance_evaluation), outputs["t4"] (rating)
+    # Returns: { "improvement_plan": list[str] }
+    # ----------------------------------------------------------
+
+    def _generate_improvement_plan(
+        self, task: Task, state: AgentState
+    ) -> dict:
+
+        params: PerformanceReviewParams = state.params
+        evaluation   = self.get_output(state, "t3")["performance_evaluation"]
+        rating_output = self.get_output(state, "t4")
+
+        rating       = rating_output["rating"]
+        rating_scale = params.rating_scale
+        weaknesses   = evaluation["weaknesses"]
+
+        prompt = f"""
+You are an HR development specialist. Create a concrete improvement plan.
+
+Employee  : {params.employee_name}
+Role      : {params.role}
+Rating    : {rating}/{rating_scale}
+Weak Areas: {weaknesses}
+
+Return ONLY a list of specific, actionable improvement items, one per line:
+- <action item 1>
+- <action item 2>
+- <action item 3>
+- <action item 4>
+- <action item 5>
+
+Each item must include: what to improve, how, and a timeframe.
+No extra text. No headers.
+"""
+
+        response = llm.invoke(prompt)
+        content  = response.content.strip()
+
+        plan = [
+            line.strip("•-* ").strip()
+            for line in content.split("\n")
+            if line.strip().startswith("-") or line.strip().startswith("•")
+        ]
+
+        return {"improvement_plan": plan}
