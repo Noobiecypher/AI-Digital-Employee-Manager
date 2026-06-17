@@ -61,18 +61,17 @@ from data_loader import get_candidates, get_role_info
 from core.llm import llm
 
 # Standalone modules — functional now, fully wired once Person 1 delivers contracts
-from recruitment_modules.resume_parser import process_resume
-from recruitment_modules.email_followup import (
-    send_followup_email,
-    notify_candidates,
-    FollowUpStage,
+from tools.recruitment_tools import(
+    process_resume, 
+    generate_job_id, 
+    generate_embed_script, 
+    schedule_interview_for_candidate
 )
-from recruitment_modules.calendar_scheduler import schedule_interview_for_candidate
-from recruitment_modules.embed_script_generator import (
-    generate_job_id,
-    generate_embed_script,
+from tools.email_tools import (
+    send_followup_email, 
+    notify_candidates, 
+    FollowUpStage
 )
-
 
 class RecruitmentAgent(BaseAgent):
 
