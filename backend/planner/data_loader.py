@@ -1,7 +1,7 @@
 import json
 import os
 
-from models import (
+from backend.models import (
     HireEmployeeParams,
     OnboardEmployeeParams,
     SalesOutreachParams,

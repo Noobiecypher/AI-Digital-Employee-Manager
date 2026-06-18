@@ -1,6 +1,6 @@
 import uuid
 
-from models import (
+from backend.models import (
     PlannerInput,
     PlannerOutput,
     Task,
@@ -11,13 +11,13 @@ from models import (
     PerformanceReviewParams,
     MarketResearchParams,
 )
-from data_loader import (
+from backend.planner.data_loader import (
     enrich_hire_params,
     enrich_onboard_params,
     enrich_sales_params,
     enrich_review_params,
 )
-from workflow_definitions import WORKFLOWS
+from backend.planner.workflow_definitions import WORKFLOWS
 
 
 # ─────────────────────────────────────────

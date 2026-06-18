@@ -1,4 +1,4 @@
-from models import Task
+from backend.models import Task
 
 
 WORKFLOWS = {

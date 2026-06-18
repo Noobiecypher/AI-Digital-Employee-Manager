@@ -84,8 +84,8 @@ The Workflow Executor initializes `AgentState` immediately after receiving outpu
 ```python
 # workflow_executor.py
 
-from models import AgentState, PlannerInput
-from planner import run_planner
+from backend.models import AgentState, PlannerInput
+from backend.planner.planner import run_planner
 
 def initialize_state(planner_input: PlannerInput) -> AgentState:
     planner_output, enriched_params = run_planner(planner_input)
