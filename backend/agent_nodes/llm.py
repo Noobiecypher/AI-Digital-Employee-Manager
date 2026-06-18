@@ -7,7 +7,7 @@ Every agent that needs LLM capabilities imports from here.
 Never import ChatOllama or any LLM provider directly in agent files.
 
 Usage:
-    from core.llm import llm
+    from backend.agent_nodes.llm import llm
 
     response = llm.invoke("your prompt here")
     print(response.content)

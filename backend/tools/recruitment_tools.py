@@ -20,7 +20,7 @@ from pathlib import Path
 from pypdf import PdfReader
 from docx import Document
 
-from core.llm import llm
+from backend.agent_nodes.llm import llm
 
 
 # ==========================================================

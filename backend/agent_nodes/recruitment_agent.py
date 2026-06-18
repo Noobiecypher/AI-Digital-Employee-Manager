@@ -48,8 +48,8 @@ Requirements:
 import os
 from datetime import datetime, timedelta
 
-from base_agent import BaseAgent
-from models import (
+from backend.agent_nodes.base_agent import BaseAgent
+from backend.models import (
     AgentState,
     Task,
     Candidate,
@@ -57,17 +57,17 @@ from models import (
     InterviewSchedule,
     HireEmployeeParams,
 )
-from data_loader import get_candidates, get_role_info
-from agent_nodes.llm import llm
+from backend.planner.data_loader import get_candidates, get_role_info
+from backend.agent_nodes.llm import llm
 
 # Standalone modules — functional now, fully wired once Person 1 delivers contracts
-from tools.recruitment_tools import(
+from backend.tools.recruitment_tools import(
     process_resume, 
     generate_job_id, 
     generate_embed_script, 
     schedule_interview_for_candidate
 )
-from tools.email_tools import (
+from backend.tools.email_tools import (
     send_followup_email, 
     notify_candidates, 
     FollowUpStage

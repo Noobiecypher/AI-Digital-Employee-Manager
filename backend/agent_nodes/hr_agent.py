@@ -15,8 +15,8 @@ Requirements:
     Ollama running locally: ollama serve
 """
 
-from base_agent import BaseAgent
-from models import (
+from backend.agent_nodes.base_agent import BaseAgent
+from backend.models import (
     AgentState,
     Task,
     EmployeeDetails,
@@ -27,8 +27,8 @@ from models import (
     OnboardEmployeeParams,
     PerformanceReviewParams,
 )
-from data_loader import get_employee, get_role_info
-from agent_nodes.llm import llm
+from backend.planner.data_loader import get_employee, get_role_info
+from backend.agent_nodes.llm import llm
 
 
 class HRAgent(BaseAgent):

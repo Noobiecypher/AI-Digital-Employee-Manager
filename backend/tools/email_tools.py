@@ -18,7 +18,7 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-from core.llm import llm
+from backend.agent_nodes.llm import llm
 
 
 # ==========================================================
