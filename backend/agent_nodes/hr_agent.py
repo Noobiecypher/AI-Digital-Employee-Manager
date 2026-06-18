@@ -28,7 +28,7 @@ from models import (
     PerformanceReviewParams,
 )
 from data_loader import get_employee, get_role_info
-from core.llm import llm
+from agent_nodes.llm import llm
 
 
 class HRAgent(BaseAgent):
