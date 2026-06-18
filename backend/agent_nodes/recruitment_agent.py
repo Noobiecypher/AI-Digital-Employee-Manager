@@ -58,7 +58,7 @@ from models import (
     HireEmployeeParams,
 )
 from data_loader import get_candidates, get_role_info
-from core.llm import llm
+from agent_nodes.llm import llm
 
 # Standalone modules — functional now, fully wired once Person 1 delivers contracts
 from tools.recruitment_tools import(
