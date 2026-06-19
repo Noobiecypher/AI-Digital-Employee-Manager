@@ -23,11 +23,15 @@ from backend.models import (
 )
 
 from backend.execution.workflow_executor import (
-    initialize_state,
-    _execute_loop,
-    save_state,
+    
+    create_workflow,
+    execute_workflow,
     load_state,
     resume_workflow,
+    list_workflow_ids,
+    WorkflowNotFoundError,
+    WorkflowNotPausedError,
+    InvalidApprovalStatusError,
 )
 
 from backend.api.schemas import (
@@ -135,42 +139,34 @@ def build_planner_input(
     )
 
 
-def map_executor_error(exc: ValueError) -> HTTPException:
-    msg = str(exc)
+def map_executor_error(exc: Exception):
 
-    if "not found" in msg:
+    if isinstance(exc, WorkflowNotFoundError):
         return error_response(
             404,
             "WORKFLOW_NOT_FOUND",
-            msg,
+            str(exc),
         )
 
-    if "awaiting_human_input" in msg:
-        return error_response(
-            409,
-            "WORKFLOW_NOT_AWAITING_INPUT",
-            msg,
-        )
-
-    if "status=" in msg:
+    if isinstance(exc, WorkflowNotPausedError):
         return error_response(
             409,
             "WORKFLOW_NOT_PAUSED",
-            msg,
+            str(exc),
         )
 
-    if "approval_status" in msg:
+    if isinstance(exc, InvalidApprovalStatusError):
         return error_response(
             422,
             "INVALID_APPROVAL_STATUS",
-            msg,
+            str(exc),
             "approval_status",
         )
 
     return error_response(
         500,
         "INTERNAL_SERVER_ERROR",
-        msg,
+        str(exc),
     )
 
 
@@ -199,9 +195,12 @@ def build_workflow_response(state) -> WorkflowResponse:
         awaiting_human_input=state.awaiting_human_input,
         approval_status=state.approval_status,
 
-        # TODO: Populate approval_context once
-        # executor exposes approval payload.
-        approval_context=None,
+        approval_context=(
+            state.outputs.get("t5")
+            if state.status == "paused"
+            and state.awaiting_human_input
+            else None
+        ),
         human_feedback=state.human_feedback,
         error_message=state.error_message,
         result=result,
@@ -230,27 +229,24 @@ async def start_workflow_route(
     )
 
     try:
-        state = initialize_state(
+        state = create_workflow(
             planner_input
-        )
+    )
 
-    except Exception:
+    except ValueError as e:
         raise error_response(
-            500,
-            "INTERNAL_SERVER_ERROR",
-            (
-                "Unexpected error while "
-                "initializing workflow."
-            ),
+            422,
+            "INVALID_WORKFLOW",
+            str(e),
         )
 
-    save_state(state)
-
-    _touch_create(state.workflow_id)
+    _touch_create(
+        state.workflow_id
+    )
 
     background_tasks.add_task(
-        _execute_loop,
-        state,
+        execute_workflow,
+        state.workflow_id,
     )
 
     return StartWorkflowResponse(
@@ -405,20 +401,8 @@ async def list_workflows_route(
 
     items = []
 
-    # TODO:
-    # Replace direct _store access with
-    # list_workflow_ids() once executor
-    # exposes persistence abstraction.
 
-    executor_store = getattr(
-        __import__(
-            "backend.execution.workflow_executor",
-            fromlist=["_store"],
-        ),
-        "_store",
-    )
-
-    for workflow_id in executor_store:
+    for workflow_id in list_workflow_ids():
 
         state = load_state(
             workflow_id

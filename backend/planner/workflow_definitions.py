@@ -79,21 +79,21 @@ WORKFLOWS = {
             task_id="t3",
             agent="hr",
             action="create_welcome_package",
-            depends_on=["t2"]
+            depends_on=["t1","t2"]
         ),
 
         Task(
             task_id="t4",
             agent="hr",
             action="create_first_week_tasks",
-            depends_on=["t3"]
+            depends_on=["t1","t2"]
         ),
 
         Task(
             task_id="t5",
             agent="reporting",
             action="generate_summary",
-            depends_on=["t4"]
+            depends_on=["t1","t2","t3","t4"]
         ),
     ],
 
@@ -131,14 +131,14 @@ WORKFLOWS = {
             task_id="t5",
             agent="sales",
             action="generate_call_scripts",
-            depends_on=["t4"]
+            depends_on=["t3"]
         ),
 
         Task(
             task_id="t6",
             agent="reporting",
             action="generate_campaign_summary",
-            depends_on=["t5"]
+            depends_on=["t3","t4","t5"]
         ),
     ],
 

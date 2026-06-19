@@ -23,6 +23,8 @@ Architecture Rules (frozen — do not modify)
 
 Public API
 ----------
+    create_workflow(planner_input: PlannerInput,) -> AgentState
+    execute_workflow(workflow_id: str,) -> AgentState
     start_workflow(planner_input: PlannerInput)  -> AgentState
     resume_workflow(workflow_id, approval_status, human_feedback) -> AgentState
 
@@ -59,6 +61,16 @@ from backend.agent_nodes.base_agent import AgentExecutionError
 
 logger = logging.getLogger(__name__)
 
+class WorkflowNotFoundError(ValueError):
+    pass
+
+
+class WorkflowNotPausedError(ValueError):
+    pass
+
+
+class InvalidApprovalStatusError(ValueError):
+    pass
 
 # ==============================================================
 # PERSISTENCE PLACEHOLDERS
@@ -143,7 +155,7 @@ def _load_state(workflow_id: str) -> AgentState:
     """
     doc = _store.get(workflow_id)
     if doc is None:
-        raise ValueError(
+        raise WorkflowNotFoundError(
             f"Workflow '{workflow_id}' not found."
         )
     return AgentState.model_validate(doc)
@@ -160,6 +172,10 @@ def save_state(state: AgentState) -> None:
 def load_state(workflow_id: str) -> AgentState:
     """Public persistence wrapper for API layer."""
     return _load_state(workflow_id)
+
+def list_workflow_ids() -> list[str]:
+    """Public persistence wrapper for API layer."""
+    return list(_store.keys())
 
 # ==============================================================
 # INTERNAL HELPERS
@@ -560,6 +576,31 @@ def _execute_loop(state: AgentState) -> AgentState:
 # PUBLIC API
 # ==============================================================
 
+def create_workflow(planner_input: PlannerInput,) -> AgentState:
+    """
+    Create and persist workflow state
+    without executing it.
+    """
+
+    state = initialize_state(
+        planner_input
+    )
+
+    _save_state(state)
+
+    return state
+
+def execute_workflow(workflow_id: str,) -> AgentState:
+    """
+    Load and execute an existing workflow.
+    """
+
+    state = _load_state(
+        workflow_id
+    )
+
+    return _execute_loop(state)
+
 def start_workflow(planner_input: PlannerInput) -> AgentState:
     """
     Initialize and execute a workflow from scratch.
@@ -662,7 +703,7 @@ def resume_workflow(
 
     # 2. Validate resumable condition.
     if state.status != "paused" or not state.awaiting_human_input:
-        raise ValueError(
+        raise WorkflowNotPausedError(
             f"Cannot resume workflow '{workflow_id}': "
             f"status={state.status!r}, "
             f"awaiting_human_input={state.awaiting_human_input}. "
@@ -671,7 +712,7 @@ def resume_workflow(
 
     # 3. Validate approval decision value.
     if approval_status not in {"approved", "rejected"}:
-        raise ValueError(
+        raise InvalidApprovalStatusError(
             f"Invalid approval_status {approval_status!r}. "
             "Must be 'approved' or 'rejected'."
         )

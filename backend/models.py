@@ -78,6 +78,9 @@ class Candidate(BaseModel):
     skills: list[str] = []
     experience_years: int = 0
     match_score: float = 0.0
+    email: str = ""
+    phone: str = ""
+
 
 
 # ==========================================================
@@ -98,6 +101,8 @@ class InterviewSchedule(BaseModel):
     interviewer: str
     date: str
     time: str
+    meet_link: str = ""
+    event_id: str = ""
 
 
 # ==========================================================
