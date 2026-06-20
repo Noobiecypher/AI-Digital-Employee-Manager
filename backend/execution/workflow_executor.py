@@ -57,6 +57,7 @@ from backend.models import AgentState, PlannerInput, Task
 from backend.planner.planner import run_planner
 from backend.execution.agent_router import get_agent
 from backend.agent_nodes.base_agent import AgentExecutionError
+from backend.database.workflow_repository import WorkflowRepository
 
 
 logger = logging.getLogger(__name__)
@@ -101,8 +102,8 @@ class InvalidApprovalStatusError(ValueError):
 #   ⑦ On status = "completed"              → REPLACE (capture final state)
 # ==============================================================
 
-_store: dict[str, dict] = {}
-"""In-memory persistence store. Replaced by MongoDB when integrated."""
+_repository: WorkflowRepository = WorkflowRepository()
+"""MongoDB persistence repository."""
 
 
 def _save_state(state: AgentState) -> None:
@@ -126,7 +127,7 @@ def _save_state(state: AgentState) -> None:
     handle conflict, or by using a conditional update pipeline. See
     MongoDB docs for $setOnInsert.
     """
-    _store[state.workflow_id] = state.model_dump()
+    _repository.save(state)
     logger.debug(
         "[%s] State persisted — status=%s current_task=%s",
         state.workflow_id,
@@ -153,12 +154,12 @@ def _load_state(workflow_id: str) -> AgentState:
     Raises:
         ValueError: If workflow_id is not present in the store.
     """
-    doc = _store.get(workflow_id)
-    if doc is None:
+    try:
+        return _repository.load(workflow_id)
+    except KeyError:
         raise WorkflowNotFoundError(
             f"Workflow '{workflow_id}' not found."
         )
-    return AgentState.model_validate(doc)
 
 # ==============================================================
 # PUBLIC PERSISTENCE HELPERS
@@ -175,7 +176,7 @@ def load_state(workflow_id: str) -> AgentState:
 
 def list_workflow_ids() -> list[str]:
     """Public persistence wrapper for API layer."""
-    return list(_store.keys())
+    return _repository.list_ids()
 
 # ==============================================================
 # INTERNAL HELPERS

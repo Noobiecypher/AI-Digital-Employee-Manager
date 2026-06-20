@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from backend.database.workflow_repository import WorkflowRepository
 from typing import Any
 
 from fastapi import (
@@ -55,28 +55,7 @@ PARAMS_MODEL_MAP = {
     "market_research": MarketResearchParams,
 }
 
-_metadata: dict[str, dict[str, str]] = {}
-
-
-def _now() -> str:
-    return datetime.now(
-        timezone.utc
-    ).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
-def _touch_create(workflow_id: str) -> None:
-    now = _now()
-
-    if workflow_id not in _metadata:
-        _metadata[workflow_id] = {
-            "created_at": now,
-            "updated_at": now,
-        }
-
-
-def _touch_update(workflow_id: str) -> None:
-    if workflow_id in _metadata:
-        _metadata[workflow_id]["updated_at"] = _now()
+_repository = WorkflowRepository()
 
 
 def error_response(
@@ -172,9 +151,8 @@ def map_executor_error(exc: Exception):
 
 def build_workflow_response(state) -> WorkflowResponse:
 
-    workflow_meta = _metadata.get(
-        state.workflow_id,
-        {},
+    workflow_meta = _repository.get_timestamps(
+        state.workflow_id
     )
 
     result = None
@@ -240,9 +218,6 @@ async def start_workflow_route(
             str(e),
         )
 
-    _touch_create(
-        state.workflow_id
-    )
 
     background_tasks.add_task(
         execute_workflow,
@@ -274,7 +249,6 @@ async def get_workflow_route(
     except ValueError as e:
         raise map_executor_error(e)
 
-    _touch_update(workflow_id)
 
     return build_workflow_response(
         state
@@ -421,9 +395,8 @@ async def list_workflows_route(
         ):
             continue
 
-        meta = _metadata.get(
-            workflow_id,
-            {},
+        meta = _repository.get_timestamps(
+            workflow_id
         )
 
         items.append(
