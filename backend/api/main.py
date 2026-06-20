@@ -1,12 +1,36 @@
+import logging
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api.routes import router
+from backend.database.mongo import close_client, get_client
 
-from fastapi.middleware.cors import CORSMiddleware
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    try:
+        get_client()
+        logger.info("MongoDB connection verified at startup.")
+    except RuntimeError as exc:
+        logger.critical(
+            "MongoDB unavailable — server will not start. Detail: %s",
+            exc,
+        )
+        raise
+
+    yield
+
+    close_client()
+
 
 app = FastAPI(
     title="AI Digital Employee Platform",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
