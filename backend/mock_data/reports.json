@@ -1,0 +1,36 @@
+{
+    "workflow_id": "wf-2026-06-19-exec-01",
+    "objective": "Execute automated outbound sales sequence to Q2 tech targets and reconcile candidate pipelines for technical sales roles.",
+    "status": "Completed",
+    "meta_stats": {
+      "execution_time_seconds": 512,
+      "total_tokens": 104200,
+      "total_cost_usd": 1.56
+    },
+    "agent_logs": [
+      {
+        "agent": "Sales + Research Agent",
+        "task": "Extract target company profiles and find key decision makers via web scraping.",
+        "status": "Success",
+        "metrics": { "accounts_targeted": 50, "contacts_found": 112 }
+      },
+      {
+        "agent": "Sales + Research Agent",
+        "task": "Generate personalized cold email copy and dispatch outreach sequences.",
+        "status": "Success",
+        "metrics": { "emails_dispatched": 112, "immediate_bounces": 9 }
+      },
+      {
+        "agent": "Recruitment + HR Agent",
+        "task": "Cross-reference newly uploaded applicant profiles with current internal engineering openings.",
+        "status": "Success",
+        "metrics": { "resumes_parsed": 25, "qualified_matches": 3 }
+      },
+      {
+        "agent": "WorkflowEngine",
+        "task": "Request manager validation for executive outreach over $10k contract value threshold.",
+        "status": "Escalated",
+        "error": "Human response timeout window expired. Initiating automatic fallback override strategy."
+      }
+    ]
+  }

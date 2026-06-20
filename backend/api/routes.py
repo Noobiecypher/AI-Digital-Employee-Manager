@@ -12,6 +12,14 @@ from fastapi import (
 
 from pydantic import ValidationError
 
+# --- REPORTING AGENT ADDITIONS ---
+import os
+import json
+from backend.tools.reporting_tools import calculate_workflow_metrics
+from backend.agent_nodes.reporting_agent import ReportingAgent
+# ---------------------------------
+
+
 from backend.models import (
     PlannerInput,
     HireEmployeeParams,
@@ -56,6 +64,10 @@ PARAMS_MODEL_MAP = {
 }
 
 _repository = WorkflowRepository()
+# --- REPORTING AGENT INITIALIZATION ---
+_api_key = os.getenv("OPENAI_API_KEY")
+_reporting_agent = ReportingAgent(api_key=_api_key) if _api_key else None
+# --------------------------------------
 
 
 def error_response(
@@ -431,3 +443,55 @@ async def list_workflows_route(
         offset=offset,
         items=paginated,
     )
+
+# --- REPORTING AGENT ROUTE ---
+@router.get(
+    "/report/analytics",
+    status_code=200,
+)
+async def get_latest_report():
+    """
+    Simulates fetching raw metrics from the Workflow Engine database,
+    processing them through the Reporting Agent pipeline, and delivering them to the UI.
+    """
+    if not _reporting_agent:
+        raise HTTPException(
+            status_code=500, 
+            detail="Reporting Agent uninitialized: OPENAI_API_KEY is missing from the environment configuration."
+        )
+        
+    try:
+        # Adjusted path pointing directly to the group's unified mock_data directory
+        json_path = os.path.join("backend", "mock_data", "reports.json")
+        
+        # 1. Read the mock data payload simulating live system states
+        with open(json_path, "r") as file:
+            raw_logs = json.load(file)
+        
+        # 2. Run numerical transformations for charts
+        structured_kpis = calculate_workflow_metrics(raw_logs)
+        
+        # 3. Request qualitative summaries from the Reporting Agent
+        ai_insights = _reporting_agent.generate_narrative_insights(raw_logs, structured_kpis)
+        
+        # 4. Construct unified interface payload
+        return {
+            "workflow_id": raw_logs.get("workflow_id", "unknown"),
+            "success": True,
+            "metrics": structured_kpis["ui_kpi_cards"],
+            "charts": structured_kpis["ui_chart_series"],
+            "insights": ai_insights
+        }
+        
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=500, 
+            detail="Configuration Error: 'backend/mock_data/reports.json' could not be resolved."
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Internal Server Pipeline Error: {str(e)}"
+        )
+# -----------------------------
+
