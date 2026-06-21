@@ -45,6 +45,7 @@ Requirements:
 """
 import os
 from datetime import datetime, timedelta
+import re
 
 from backend.agent_nodes.base_agent import BaseAgent
 from backend.models import (
@@ -449,14 +450,10 @@ No explanation. Just the skill list.
         if not salary_range or not salary_range.strip():
             raise ValueError("salary_range is empty — cannot prepare offer.")
 
-        cleaned = (
-            salary_range
-            .replace(",", "")
-            .replace(" ", "")
-            .replace("$", "")
-            .replace("₹", "")
-            .replace("Rs.", "")
-            .replace("Rs", "")
+        cleaned = re.sub(
+            r"[^0-9a-z\-]",
+            "",
+            salary_range.lower()
         )
 
         def _to_int(token: str) -> int:
