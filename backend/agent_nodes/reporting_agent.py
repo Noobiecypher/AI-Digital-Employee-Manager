@@ -1,13 +1,23 @@
 import json
 from langchain_ollama import ChatOllama
+from backend.agent_nodes.base_agent import BaseAgent
+from backend.models import AgentState, Task
 
-class ReportingAgent:
+class ReportingAgent(BaseAgent):
     def __init__(self, api_key: str = None):
+        super().__init__("reporting")
         # Swap out the model name here to your lightweight choice
         self.llm = ChatOllama(
             model="qwen2.5:1.5b", 
             format="json"
         )
+
+    def execute(self, task: Task, state: AgentState) -> dict:
+        if task.action == "generate_narrative_insights":
+            log_data = state.outputs
+            processed_kpis = {}
+            return self.generate_narrative_insights(log_data, processed_kpis)
+        raise ValueError(f"Unknown reporting action: {task.action}")
 
     def generate_narrative_insights(self, log_data: dict, processed_kpis: dict) -> dict:
         # 1. HARD PROMPTING: Show it the exact dictionary shape

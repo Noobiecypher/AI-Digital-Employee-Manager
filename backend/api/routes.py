@@ -64,10 +64,14 @@ PARAMS_MODEL_MAP = {
 }
 
 _repository = WorkflowRepository()
-# --- REPORTING AGENT INITIALIZATION ---
-_api_key = os.getenv("OPENAI_API_KEY")
-_reporting_agent = ReportingAgent(api_key=_api_key) if _api_key else None
-# --------------------------------------
+
+# --- OLLAMA REPORTING AGENT INITIALIZATION ---
+try:
+    _reporting_agent = ReportingAgent()
+except Exception as e:
+    _reporting_agent = None
+    print(f"Warning: ReportingAgent failed to initialize. Ollama engine might be stopped: {e}")
+# ---------------------------------------------
 
 
 def error_response(
@@ -454,10 +458,10 @@ async def get_latest_report():
     Simulates fetching raw metrics from the Workflow Engine database,
     processing them through the Reporting Agent pipeline, and delivering them to the UI.
     """
-    if not _reporting_agent:
+    if _reporting_agent is None:
         raise HTTPException(
             status_code=500, 
-            detail="Reporting Agent uninitialized: OPENAI_API_KEY is missing from the environment configuration."
+            detail="Reporting Agent uninitialized. Ensure that Ollama is running locally on your computer with the 'qwen2.5:1.5b' model active."
         )
         
     try:
