@@ -13,7 +13,7 @@ class ReportingAgent(BaseAgent):
         )
 
     def execute(self, task: Task, state: AgentState) -> dict:
-        if task.action == "generate_narrative_insights":
+        if task.action in ("generate_narrative_insights", "generate_summary"):
             log_data = state.outputs
             processed_kpis = {}
             return self.generate_narrative_insights(log_data, processed_kpis)
