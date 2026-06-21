@@ -17,15 +17,14 @@ Returns output dict per task_contracts.md. Never mutates AgentState directly.
 ============================================================
 INTEGRATION STATUS — READ BEFORE EDITING
 ============================================================
-The following features are built as standalone modules in
-recruitment_modules/ and are functional independently, but their
-FULL wiring into this agent depends on Person 1 delivering:
+Candidate.email/phone and InterviewSchedule.meet_link/event_id are now
+first-class model fields (models.py updated) and are wired in directly —
+no more workaround stripping/bolting of dict keys.
 
-    1. Updated models.py — Candidate needs resume_text/email/phone fields,
-       InterviewSchedule needs meet_link/event_id fields
-    2. Applications stored in DB (replacing candidates.json)
-    3. data_loader.get_applications(job_id) function
-    4. Real embed script serving endpoint (JOB_FORM_BASE_URL)
+Still pending from Person 1:
+    1. Applications stored in DB (replacing candidates.json)
+    2. data_loader.get_applications(job_id) function
+    3. Real embed script serving endpoint (JOB_FORM_BASE_URL)
 
 Until then, this file runs in HYBRID MODE:
     - Resume parsing module is wired in but falls back to mock
@@ -36,7 +35,7 @@ Until then, this file runs in HYBRID MODE:
     - Follow-up emails send if SMTP env vars are configured, else
       they're skipped silently (logged, not raised).
 
-Search for "TODO(person1)" to find every spot that needs their input.
+Search for "TODO(person1)" to find every remaining spot needing their input.
 ============================================================
 
 Requirements:
@@ -44,7 +43,6 @@ Requirements:
     pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib
     Ollama running locally: ollama serve
 """
-
 import os
 from datetime import datetime, timedelta
 
@@ -60,17 +58,16 @@ from backend.models import (
 from backend.planner.data_loader import get_candidates, get_role_info
 from backend.agent_nodes.llm import llm
 
-# Standalone modules — functional now, fully wired once Person 1 delivers contracts
-from backend.tools.recruitment_tools import(
-    process_resume, 
-    generate_job_id, 
-    generate_embed_script, 
-    schedule_interview_for_candidate
+from backend.tools.recruitment_tools import (
+    process_resume,
+    schedule_interview_for_candidate,
+    generate_job_id,
+    generate_embed_script,
 )
 from backend.tools.email_tools import (
-    send_followup_email, 
-    notify_candidates, 
-    FollowUpStage
+    send_followup_email,
+    notify_candidates,
+    FollowUpStage,
 )
 
 class RecruitmentAgent(BaseAgent):
@@ -198,6 +195,16 @@ No explanation. Just the skill list.
     # Reads: outputs["t2"], state.params (experience_years, role)
     # Returns: { "shortlisted_candidates": list[Candidate] }
     #
+    # SHORTLISTING STRATEGY — top-N, not a fixed threshold.
+    # A fixed match_score cutoff (e.g. >= 0.5) is brittle: the LLM-generated
+    # required_skills list can run to 15-20 items, and no real candidate
+    # realistically matches half of a list that long. A fixed threshold
+    # rejected every candidate in testing even though several were
+    # reasonable fits. Instead, every candidate who clears the experience
+    # gate is scored and ranked, and the top N by match_score are
+    # shortlisted — guaranteeing the pipeline always has candidates to
+    # move forward with when the applicant pool is non-empty.
+    #
     # HYBRID MODE:
     #   - If resume_files is passed in state.params (not yet a real field —
     #     TODO(person1): add resume_files: list[str] to HireEmployeeParams,
@@ -208,6 +215,8 @@ No explanation. Just the skill list.
     # that have an email address available (resume-parsed candidates only —
     # mock JSON candidates have no email field yet).
     # ----------------------------------------------------------
+
+    SHORTLIST_TOP_N = 3
 
     def _shortlist_candidates(
         self, task: Task, state: AgentState
@@ -228,11 +237,12 @@ No explanation. Just the skill list.
         else:
             raw_candidates = get_candidates(params.role)
 
-        shortlisted: list[dict] = []
+        eligible: list[dict] = []
         rejected_candidates: list[dict] = []
 
         for raw in raw_candidates:
 
+            # Experience gate — hard cutoff, not negotiable via ranking.
             if raw.get("experience_years", 0) < experience_years:
                 rejected_candidates.append(raw)
                 continue
@@ -252,14 +262,18 @@ No explanation. Just the skill list.
                 skills           = raw.get("skills", []),
                 experience_years = raw.get("experience_years", 0),
                 match_score      = match_score,
+                email            = raw.get("email", ""),
+                phone            = raw.get("phone", ""),
             )
 
-            if match_score >= 0.5:
-                shortlisted.append({**candidate.model_dump(), "email": raw.get("email", "")})
-            else:
-                rejected_candidates.append(raw)
+            eligible.append(candidate.model_dump())
 
-        shortlisted.sort(key=lambda c: c["match_score"], reverse=True)
+        # Rank by match_score and take the top N — this is what changed.
+        eligible.sort(key=lambda c: c["match_score"], reverse=True)
+        shortlisted = eligible[: self.SHORTLIST_TOP_N]
+        rejected_candidates.extend(
+            [c for c in eligible[self.SHORTLIST_TOP_N :]]
+        )
 
         # Follow-up emails — only sends if email present and SMTP configured.
         # Silently skips otherwise (see email_followup.py docstring).
@@ -268,13 +282,7 @@ No explanation. Just the skill list.
         if rejected_candidates:
             notify_candidates(rejected_candidates, FollowUpStage.REJECTED, role=params.role)
 
-        # Strip email before returning — not part of the Candidate model yet.
-        # TODO(person1): add email field to Candidate model so this isn't needed.
-        clean_shortlisted = [
-            {k: v for k, v in c.items() if k != "email"} for c in shortlisted
-        ]
-
-        return {"shortlisted_candidates": clean_shortlisted}
+        return {"shortlisted_candidates": shortlisted}
 
     def _parse_resumes(self, resume_files: list[str], role: str) -> list[dict]:
         """
@@ -350,9 +358,9 @@ No explanation. Just the skill list.
                     interviewer    = interviewer_email,
                     date           = booking["start"][:10],
                     time           = booking["start"][11:16],
+                    meet_link      = booking.get("meet_link", ""),
+                    event_id       = booking.get("event_id", ""),
                 ).model_dump()
-                entry["meet_link"] = booking.get("meet_link", "")
-                entry["event_id"]  = booking.get("event_id", "")
             else:
                 interview_date = base_date + timedelta(days=i)
                 entry = InterviewSchedule(
@@ -360,9 +368,9 @@ No explanation. Just the skill list.
                     interviewer    = f"Hiring Manager — {params.department}",
                     date           = interview_date.strftime("%Y-%m-%d"),
                     time           = "10:00 AM",
+                    meet_link      = "",
+                    event_id       = "",
                 ).model_dump()
-                entry["meet_link"] = ""
-                entry["event_id"]  = ""
 
             schedule.append(entry)
 
@@ -412,10 +420,6 @@ No explanation. Just the skill list.
         )
 
         # Follow-up email — congratulates selected candidate.
-        # TODO(person1): selected candidate's email isn't preserved through
-        # to t3's output (stripped in shortlist_candidates). Once Candidate
-        # model has an email field, remove that stripping step and this
-        # will work automatically.
         send_followup_email(
             to_email       = selected.get("email", ""),
             stage          = FollowUpStage.OFFER_EXTENDED,
@@ -430,11 +434,47 @@ No explanation. Just the skill list.
     # ----------------------------------------------------------
 
     def _parse_salary_midpoint(self, salary_range: str) -> int:
+        """
+        Supports formats like:
+            "80000-120000"
+            "80,000 - 1,20,000"
+            "$80,000-$100,000"
+            "₹80,000-₹100,000"
+            "80k-100k"
+        Raises ValueError if the format cannot be parsed, instead of
+        silently returning 0 — a silent 0 would produce an offer letter
+        with no real salary, which is worse than failing loudly.
+        """
+
+        if not salary_range or not salary_range.strip():
+            raise ValueError("salary_range is empty — cannot prepare offer.")
+
+        cleaned = (
+            salary_range
+            .replace(",", "")
+            .replace(" ", "")
+            .replace("$", "")
+            .replace("₹", "")
+            .replace("Rs.", "")
+            .replace("Rs", "")
+        )
+
+        def _to_int(token: str) -> int:
+            token = token.strip().lower()
+            if token.endswith("k"):
+                return int(float(token[:-1]) * 1_000)
+            if token.endswith("l") or token.endswith("lakh"):
+                return int(float(token.rstrip("lakh").rstrip("l")) * 100_000)
+            return int(token)
+
         try:
-            cleaned = salary_range.replace(",", "").replace(" ", "")
             if "-" in cleaned:
                 low, high = cleaned.split("-")
-                return (int(low) + int(high)) // 2
-            return int(cleaned)
-        except Exception:
-            return 0
+                return (_to_int(low) + _to_int(high)) // 2
+            return _to_int(cleaned)
+        except (ValueError, IndexError) as e:
+            raise ValueError(
+                f"Could not parse salary_range '{salary_range}'. "
+                f"Supported formats: '80000-120000', '80k-100k', "
+                f"'$80,000-$100,000', '₹80,000-₹100,000'."
+            ) from e
