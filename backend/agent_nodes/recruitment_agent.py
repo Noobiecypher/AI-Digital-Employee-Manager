@@ -442,36 +442,54 @@ No explanation. Just the skill list.
             "$80,000-$100,000"
             "₹80,000-₹100,000"
             "80k-100k"
-        Raises ValueError if the format cannot be parsed, instead of
-        silently returning 0 — a silent 0 would produce an offer letter
-        with no real salary, which is worse than failing loudly.
+            "12,00,000 - 15,00,000 INR per annum"
+
+        Returns the midpoint salary as an integer.
         """
 
         if not salary_range or not salary_range.strip():
-            raise ValueError("salary_range is empty — cannot prepare offer.")
+            raise ValueError(
+                "salary_range is empty — cannot prepare offer."
+            )
 
-        cleaned = re.sub(
-            r"[^0-9a-z\-]",
-            "",
+    # Remove currency symbols and text labels while preserving numbers
+        cleaned = (
             salary_range.lower()
+            .replace(",", "")
+            .replace("inr per annum", "")
+            .replace("per annum", "")
+            .replace("inr", "")
+            .replace("₹", "")
+            .replace("$", "")
+            .replace(" ", "")
         )
 
         def _to_int(token: str) -> int:
             token = token.strip().lower()
+
             if token.endswith("k"):
                 return int(float(token[:-1]) * 1_000)
-            if token.endswith("l") or token.endswith("lakh"):
-                return int(float(token.rstrip("lakh").rstrip("l")) * 100_000)
+
+            if token.endswith("lakh"):
+                return int(float(token[:-4]) * 100_000)
+
+            if token.endswith("l"):
+                return int(float(token[:-1]) * 100_000)
+
             return int(token)
 
         try:
             if "-" in cleaned:
-                low, high = cleaned.split("-")
+                low, high = cleaned.split("-", 1)
                 return (_to_int(low) + _to_int(high)) // 2
+
             return _to_int(cleaned)
+
         except (ValueError, IndexError) as e:
             raise ValueError(
                 f"Could not parse salary_range '{salary_range}'. "
-                f"Supported formats: '80000-120000', '80k-100k', "
-                f"'$80,000-$100,000', '₹80,000-₹100,000'."
+                f"Supported formats: '80000-120000', "
+                f"'80k-100k', '$80,000-$100,000', "
+                f"'₹80,000-₹100,000', "
+                f"'12,00,000 - 15,00,000 INR per annum'."
             ) from e

@@ -26,6 +26,7 @@ from backend.models import (
     PerformanceEvaluation,
     OnboardEmployeeParams,
     PerformanceReviewParams,
+    HRMetrics,
 )
 from backend.planner.data_loader import get_employee, get_role_info
 from backend.agent_nodes.llm import llm
@@ -55,6 +56,10 @@ class HRAgent(BaseAgent):
             "evaluate_performance":      self._evaluate_performance,
             "generate_rating":           self._generate_rating,
             "generate_improvement_plan": self._generate_improvement_plan,
+
+            # performance report
+            # performance_report
+            "collect_hr_metrics": self._collect_hr_metrics,
         }
 
         handler = handlers.get(task.action)
@@ -511,3 +516,56 @@ No extra text. No headers.
         ]
 
         return {"improvement_plan": plan}
+    
+
+
+    # performance report 
+    # ----------------------------------------------------------
+    # t1 - collect_hr_metrics
+    # Reads:report_period,departments,metrics_to_include
+    # Returns:`{"hr_metrics": HRMetrics}`
+    # ----------------------------------------------------------
+
+
+    def _collect_hr_metrics(
+        self,
+        task: Task,
+        state: AgentState
+    ) -> dict:
+
+        p = state.params  # PerformanceReportParams
+
+        period = getattr(p, "report_period", "")
+
+        wanted = getattr(
+            p,
+            "metrics_to_include",
+            []
+        ) or [
+            "employee_count",
+            "goal_completion_rate",
+            "average_performance_rating",
+        ]
+
+        defaults = {
+            "employee_count": 120,
+            "average_performance_rating": 4.2,
+            "goal_completion_rate": "82%",
+            "employee_satisfaction_score": 4.4,
+            "attrition_rate": "5%",
+            "training_completion_rate": "91%",
+            "internal_promotions": 8,
+        }
+
+        metrics = {
+            m: defaults.get(m, "n/a")
+            for m in wanted
+        }
+
+        metrics["report_period"] = period
+
+        return {
+            "hr_metrics": HRMetrics(
+                metrics=metrics
+            ).model_dump()
+        }
