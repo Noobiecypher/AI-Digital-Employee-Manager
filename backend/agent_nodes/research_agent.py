@@ -63,6 +63,39 @@ def _coerce(model_cls, data: dict, fallback: dict) -> dict:
         return model_cls(**fallback).model_dump()
 
 
+def _as_str(item) -> str:
+    """Normalize one item to a string. The LLM sometimes returns objects
+    (e.g. {'action','rationale'} or {'message','channel'}); fold them into
+    readable text so the list[str] contract is never violated."""
+    if isinstance(item, str):
+        return item
+    if isinstance(item, dict):
+        if "action" in item and "rationale" in item:
+            return f"{item['action']} — {item['rationale']}"
+        if "message" in item:
+            ch = item.get("channel")
+            return f"[{ch}] {item['message']}" if ch else str(item["message"])
+        for k in ("finding", "text", "summary", "title"):
+            if k in item:
+                return str(item[k])
+        return " — ".join(str(v) for v in item.values())
+    return str(item)
+
+
+def _to_str_list(items) -> list[str]:
+    return [_as_str(x) for x in (items or [])]
+
+
+def _competitor_analysis(data: dict, fallback: dict) -> dict:
+    """Build a CompetitorAnalysis with each list normalized to str + per-field
+    fallback, so messy LLM shapes are preserved as text rather than dropped."""
+    return CompetitorAnalysis(
+        competitors=_to_str_list(data.get("competitors") or fallback["competitors"]),
+        strengths=_to_str_list(data.get("strengths") or fallback["strengths"]),
+        weaknesses=_to_str_list(data.get("weaknesses") or fallback["weaknesses"]),
+    ).model_dump()
+
+
 class ResearchAgent(BaseAgent):
 
     def __init__(self) -> None:
@@ -94,15 +127,16 @@ class ResearchAgent(BaseAgent):
             f"Product: {p.product_name}\nSegment: {p.target_segment}\n"
             f"Known pain points: {list(p.pain_points)}\nReturn ONLY the JSON object."
         )
-        trends = _ask_json(prompt, {"market_trends": [
+        fb = {"market_trends": [
             "Buyers are consolidating tools and demanding measurable ROI.",
             "Growing appetite for AI automation in operations.",
             "Preference for fast onboarding and low setup cost.",
-        ]}).get("market_trends", [])
+        ]}
+        trends = _ask_json(prompt, fb).get("market_trends") or fb["market_trends"]
         data = MarketData(
             target_segment=p.target_segment,
-            pain_points=list(p.pain_points),
-            market_trends=list(trends),
+            pain_points=_to_str_list(p.pain_points),
+            market_trends=_to_str_list(trends),
         )
         return {"market_data": data.model_dump()}
 
@@ -122,7 +156,7 @@ class ResearchAgent(BaseAgent):
             "strengths": ["Established brand", "Broad feature coverage"],
             "weaknesses": ["Limited AI-native automation", "Slower time-to-value"],
         }
-        return {"competitor_analysis": _coerce(CompetitorAnalysis, _ask_json(prompt, fallback), fallback)}
+        return {"competitor_analysis": _competitor_analysis(_ask_json(prompt, fallback), fallback)}
 
     # ===================== market_research =====================
 
@@ -152,14 +186,15 @@ class ResearchAgent(BaseAgent):
             "strengths": [f"{c} has established market presence" for c in competitors] or ["Established incumbents"],
             "weaknesses": [f"{c} offers limited AI-native automation" for c in competitors] or ["Limited automation"],
         }
-        return {"competitor_analysis": _coerce(CompetitorAnalysis, _ask_json(prompt, fallback), fallback)}
+        return {"competitor_analysis": _competitor_analysis(_ask_json(prompt, fallback), fallback)}
 
     # t3
     def _synthesize_findings(self, task: Task, state: AgentState) -> dict:
         ca = self.get_output(state, "t2")["competitor_analysis"]
         prompt = (
             "Synthesize the competitor analysis below into 3-5 concise, concrete "
-            "findings. Return JSON: {\"findings\": [\"...\"]}.\n\n"
+            "findings. Return JSON: {\"findings\": [\"...\"]}. Each finding MUST be a "
+            "single plain string, NOT an object.\n\n"
             f"Competitor analysis: {ca}\nReturn ONLY the JSON object."
         )
         fallback = {"findings": [
@@ -167,14 +202,15 @@ class ResearchAgent(BaseAgent):
             "Buyers value fast time-to-value and clear ROI.",
             "There is whitespace for an autonomous, agentic offering.",
         ]}
-        return {"findings": list(_ask_json(prompt, fallback).get("findings", fallback["findings"]))}
+        return {"findings": _to_str_list(_ask_json(prompt, fallback).get("findings", fallback["findings"]))}
 
     # t4
     def _generate_recommendations(self, task: Task, state: AgentState) -> dict:
         findings = self.get_output(state, "t3")["findings"]
         prompt = (
             "Based on these findings, produce 3-5 actionable recommendations. "
-            "Return JSON: {\"recommendations\": [\"...\"]}.\n\n"
+            "Return JSON: {\"recommendations\": [\"...\"]}. Each recommendation MUST be "
+            "a single plain string (you may phrase it as 'action — rationale'), NOT an object.\n\n"
             f"Findings: {findings}\nReturn ONLY the JSON object."
         )
         fallback = {"recommendations": [
@@ -182,7 +218,7 @@ class ResearchAgent(BaseAgent):
             "Lead messaging with measurable time savings.",
             "Target segments underserved by incumbents.",
         ]}
-        return {"recommendations": list(_ask_json(prompt, fallback).get("recommendations", fallback["recommendations"]))}
+        return {"recommendations": _to_str_list(_ask_json(prompt, fallback).get("recommendations", fallback["recommendations"]))}
 
     # t5
     def _generate_structured_report(self, task: Task, state: AgentState) -> dict:
@@ -195,8 +231,8 @@ class ResearchAgent(BaseAgent):
                      "focus on time-to-value and underserved segments.",
         )
         report = StructuredReport(
-            findings=list(findings),
-            recommendations=list(recommendations),
+            findings=_to_str_list(findings),
+            recommendations=_to_str_list(recommendations),
             summary=summary,
         )
         return {"structured_report": report.model_dump()}
