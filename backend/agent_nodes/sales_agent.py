@@ -49,6 +49,29 @@ def _ask_text(prompt: str, fallback: str) -> str:
         return fallback
 
 
+def _as_str(item) -> str:
+    """Normalize one item to a string. The LLM sometimes returns objects
+    (e.g. {'message','channel'} or {'subject','body'}); fold them into
+    readable text so the list[str] contract is never violated."""
+    if isinstance(item, str):
+        return item
+    if isinstance(item, dict):
+        if "message" in item:
+            ch = item.get("channel")
+            return f"[{ch}] {item['message']}" if ch else str(item["message"])
+        if "subject" in item and "body" in item:
+            return f"Subject: {item['subject']}\n{item['body']}"
+        for k in ("text", "script", "body", "content"):
+            if k in item:
+                return str(item[k])
+        return " — ".join(str(v) for v in item.values())
+    return str(item)
+
+
+def _to_str_list(items) -> list[str]:
+    return [_as_str(x) for x in (items or [])]
+
+
 class SalesAgent(BaseAgent):
 
     def __init__(self) -> None:
@@ -74,20 +97,22 @@ class SalesAgent(BaseAgent):
         p = state.params  # SalesOutreachParams
         prompt = (
             "Create an outreach strategy. Return JSON with 'key_messages' "
-            "(list of 3-5 short positioning statements) only.\n\n"
+            "(list of 3-5 short positioning statements). Each item MUST be a single "
+            "plain string, NOT an object.\n\n"
             f"Campaign goal: {p.campaign_goal}\nChannels: {list(p.outreach_channels)}\n"
             f"Segment: {p.target_segment}\nProduct: {p.product_name}\n"
             f"Competitor analysis: {ca}\nReturn ONLY the JSON object."
         )
-        messages = _ask_json(prompt, {"key_messages": [
+        fb = {"key_messages": [
             f"Cut manual work for {p.target_segment} with AI employees.",
             "Faster time-to-value than incumbent suites.",
             "Human stays in control on sensitive actions.",
-        ]}).get("key_messages", [])
+        ]}
+        messages = _ask_json(prompt, fb).get("key_messages") or fb["key_messages"]
         strategy = OutreachStrategy(
             campaign_goal=p.campaign_goal,
             channels=list(p.outreach_channels),
-            key_messages=list(messages),
+            key_messages=_to_str_list(messages),
         )
         return {"outreach_strategy": strategy.model_dump()}
 
@@ -106,7 +131,7 @@ class SalesAgent(BaseAgent):
             "Email 3 — Break-up: last note from me; happy to send a 2-min overview instead.",
         ]}
         seq = _ask_json(prompt, fallback).get("email_sequence", fallback["email_sequence"])
-        return {"email_sequence": [str(s) for s in seq]}
+        return {"email_sequence": _to_str_list(seq)}
 
     # t5
     def _generate_call_scripts(self, task: Task, state: AgentState) -> dict:
@@ -123,7 +148,7 @@ class SalesAgent(BaseAgent):
             "Close: can I grab 20 minutes this week to show a live run?",
         ]}
         scripts = _ask_json(prompt, fallback).get("call_scripts", fallback["call_scripts"])
-        return {"call_scripts": [str(s) for s in scripts]}
+        return {"call_scripts": _to_str_list(scripts)}
 
     # ===================== performance_report =====================
 
