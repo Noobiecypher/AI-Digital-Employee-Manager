@@ -558,8 +558,9 @@ No extra text. No headers.
         }
 
         metrics = {
-            m: defaults.get(m, "n/a")
+            m: defaults[m]
             for m in wanted
+            if m in defaults
         }
 
         metrics["report_period"] = period
