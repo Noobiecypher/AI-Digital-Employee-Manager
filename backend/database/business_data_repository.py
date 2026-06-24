@@ -7,6 +7,7 @@ This is the ONLY module that reads from or writes to:
     employees   — full CRUD
     candidates  — full CRUD  (candidate_id auto-generated as UUID4)
     products    — full CRUD  (product_name is the business key)
+    goals       — full CRUD
     roles       — read-only  (managed by seed_data.py)
 
 No other module constructs queries or touches these collections directly.
@@ -46,7 +47,7 @@ exact string match (business keys are treated as case-sensitive tokens).
 
 Dependency injection
 --------------------
-All four collections can be injected at construction time for unit tests:
+All five collections can be injected at construction time for unit tests:
 
     from mongomock import MongoClient as MockClient
     db = MockClient()["test"]
@@ -55,6 +56,7 @@ All four collections can be injected at construction time for unit tests:
         candidates_collection=db["candidates"],
         products_collection=db["products"],
         roles_collection=db["roles"],
+        goals_collection=db["goals"],
     )
 
 Omit any collection to have it resolved lazily via mongo.py on first use.
@@ -65,6 +67,8 @@ Recommended indexes (run once during provisioning)
     db.candidates.create_index("candidate_id", unique=True)
     db.products.create_index("product_name")
     db.roles.create_index([("department", 1), ("role", 1)])
+    db.goals.create_index([("employee_name", 1), ("review_period", 1)],unique=True)
+    
 """
 
 from __future__ import annotations
@@ -82,6 +86,7 @@ from backend.database.mongo import (
     get_employees_collection,
     get_products_collection,
     get_roles_collection,
+    get_goals_collection,
 )
 
 logger = logging.getLogger(__name__)
@@ -118,6 +123,14 @@ class BusinessDataRepository:
     Methods — Roles (read-only)
     ---------------------------
     list_roles()                              → list[dict]
+    
+    Methods — Goals
+    ----------------
+    list_goals()                                       → list[dict]
+    get_goal(employee_name, review_period)             → dict
+    create_goal(data)                                  → dict
+    update_goal(employee_name, review_period, updates) → dict
+    delete_goal(employee_name, review_period)          → None
     """
 
     def __init__(
@@ -126,6 +139,7 @@ class BusinessDataRepository:
         candidates_collection: Optional[Collection] = None,
         products_collection: Optional[Collection] = None,
         roles_collection: Optional[Collection] = None,
+        goals_collection: Optional[Collection] = None,
     ) -> None:
         """
         Args:
@@ -137,11 +151,14 @@ class BusinessDataRepository:
                                    Resolved lazily via mongo.py if omitted.
             roles_collection:      Injected pymongo Collection for roles.
                                    Resolved lazily via mongo.py if omitted.
+            goals_collection:      Injected pymongo Collection for goals.
+                                   Resolved lazily via mongo.py if omitted.                       
         """
         self._employees: Optional[Collection] = employees_collection
         self._candidates: Optional[Collection] = candidates_collection
         self._products: Optional[Collection] = products_collection
         self._roles: Optional[Collection] = roles_collection
+        self._goals: Optional[Collection] = goals_collection
 
     # ------------------------------------------------------------------
     # Collection properties — lazy resolution via mongo.py getters.
@@ -175,7 +192,14 @@ class BusinessDataRepository:
         if self._roles is None:
             self._roles = get_roles_collection()
         return self._roles
-
+    
+    @property
+    def goals(self) -> Collection:
+        """Resolve and cache the goals collection on first access."""
+        if self._goals is None:
+            self._goals = get_goals_collection()
+        return self._goals
+    
     # ==================================================================
     # PRIVATE HELPERS
     # ==================================================================
@@ -202,7 +226,24 @@ class BusinessDataRepository:
                 "$options": "i",
             }
         }
-
+    
+    @staticmethod
+    def _goal_filter(
+        employee_name: str,
+        review_period: str,
+    ) -> dict:
+        """Case-insensitive filter for goal documents."""
+        return {
+            "employee_name": {
+                "$regex": f"^{re.escape(employee_name)}$",
+                "$options": "i",
+            },
+            "review_period": {
+                "$regex": f"^{re.escape(review_period)}$",
+                "$options": "i",
+            },
+        }
+    
     @staticmethod
     def _strip_id(document: dict) -> dict:
         """
@@ -862,3 +903,291 @@ class BusinessDataRepository:
             raise RuntimeError(
                 f"Failed to list roles: {exc}"
             ) from exc
+        
+
+    # ==================================================================
+    # GOALS
+    # ==================================================================
+
+    def list_goals(self) -> list[dict]:
+        """
+        Return all goal documents, sorted by employee_name and
+        review_period ascending.
+
+        Returns:
+            List of goal dicts with _id excluded.
+
+        Raises:
+            RuntimeError: On any PyMongo failure.
+        """
+        try:
+            return list(
+                self.goals.find(
+                    {},
+                    {"_id": 0},
+                    sort=[
+                        ("employee_name", 1),
+                        ("review_period", 1),
+                    ],
+                )
+            )
+        except PyMongoError as exc:
+            logger.error("list_goals failed: %s", exc)
+            raise RuntimeError(
+                f"Failed to list goals: {exc}"
+            ) from exc
+
+
+    def get_goal(
+        self,
+        employee_name: str,
+        review_period: str,
+    ) -> dict:
+        """
+        Return a single goal document identified by employee_name and
+        review_period (case-insensitive exact match).
+
+        Uses $regex with re.escape() — mirrors data_loader.get_goals().
+
+        Args:
+            employee_name: Employee whose goals are being retrieved.
+            review_period: Review cycle (e.g. "Q2 2026").
+
+        Returns:
+            Goal document with _id excluded.
+
+        Raises:
+            ValueError:   If no goals exist for the employee and review period.
+            RuntimeError: On any PyMongo failure.
+        """
+        try:
+            doc = self.goals.find_one(
+                self._goal_filter(
+                    employee_name,
+                    review_period,
+                ),
+                {"_id": 0},
+            )
+
+        except PyMongoError as exc:
+            logger.error(
+                "get_goal('%s', '%s') failed: %s",
+                employee_name,
+                review_period,
+                exc,
+            )
+
+            raise RuntimeError(
+                f"Failed to retrieve goals for '{employee_name}' "
+                f"({review_period}): {exc}"
+            ) from exc
+
+        if doc is None:
+            raise ValueError(
+                f"Goals not found for '{employee_name}' "
+                f"({review_period})"
+            )
+
+        return doc
+
+
+    def create_goal(self, data: dict) -> dict:
+        """
+        Insert a new goal document.
+
+        Pre-checks for duplicate goals using employee_name and
+        review_period (case-insensitive) so the caller receives a
+        ValueError (→ 409 Conflict) rather than a raw PyMongo error.
+
+        Args:
+            data: Dict from GoalCreateRequest.model_dump().
+                Must contain 'employee_name' and 'review_period'
+                as the unique business key.
+
+        Returns:
+            The inserted goal document (without _id).
+
+        Raises:
+            ValueError:   If goals for the same employee and review
+                        period already exist.
+            RuntimeError: On any PyMongo failure.
+        """
+        employee_name: str = data["employee_name"]
+        review_period: str = data["review_period"]
+
+        try:
+            existing = self.goals.find_one(
+                self._goal_filter(
+                    employee_name,
+                    review_period,
+                ),
+                {"_id": 0},
+            )
+
+        except PyMongoError as exc:
+            logger.error(
+                "create_goal pre-check failed for '%s' (%s): %s",
+                employee_name,
+                review_period,
+                exc,
+            )
+
+            raise RuntimeError(
+                f"Failed to create goals for '{employee_name}' "
+                f"({review_period}): {exc}"
+            ) from exc
+
+        if existing is not None:
+            raise ValueError(
+                f"Goals for '{employee_name}' "
+                f"({review_period}) already exist"
+            )
+
+        document = {**data}
+
+        try:
+            self.goals.insert_one(document)
+
+        except PyMongoError as exc:
+            logger.error(
+                "create_goal insert failed for '%s' (%s): %s",
+                employee_name,
+                review_period,
+                exc,
+            )
+
+            raise RuntimeError(
+                f"Failed to create goals for '{employee_name}' "
+                f"({review_period}): {exc}"
+            ) from exc
+
+        logger.debug(
+            "Goals created for '%s' (%s).",
+            employee_name,
+            review_period,
+        )
+
+        return self._strip_id(document)
+
+
+    def update_goal(
+        self,
+        employee_name: str,
+        review_period: str,
+        updates: dict,
+    ) -> dict:
+        """
+        Apply partial updates to an existing goal document via $set.
+
+        employee_name and review_period together form the immutable
+        business key and must not appear in `updates` — the route
+        layer enforces this via the schema.
+
+        Args:
+            employee_name: Employee whose goals are being updated.
+            review_period: Review cycle identifier (e.g. "Q2 2026").
+            updates:       Dict of field-value pairs to apply
+                        (None-stripped).
+
+        Returns:
+            The full updated goal document (without _id).
+
+        Raises:
+            ValueError:   If no goal document exists for the employee
+                        and review period.
+            RuntimeError: On any PyMongo failure.
+        """
+        self.get_goal(
+            employee_name,
+            review_period,
+        )
+
+        if not updates:
+            return self.get_goal(
+                employee_name,
+                review_period,
+            )
+
+        try:
+            self.goals.update_one(
+                self._goal_filter(
+                    employee_name,
+                    review_period,
+                ),
+                {"$set": updates},
+            )
+
+        except PyMongoError as exc:
+            logger.error(
+                "update_goal('%s', '%s') failed: %s",
+                employee_name,
+                review_period,
+                exc,
+            )
+
+            raise RuntimeError(
+                f"Failed to update goals for '{employee_name}' "
+                f"({review_period}): {exc}"
+            ) from exc
+
+        logger.debug(
+            "Goals for '%s' (%s) updated — fields: %s",
+            employee_name,
+            review_period,
+            list(updates),
+        )
+
+        return self.get_goal(
+            employee_name,
+            review_period,
+        )
+
+
+    def delete_goal(
+        self,
+        employee_name: str,
+        review_period: str,
+    ) -> None:
+        """
+        Delete a goal document identified by employee_name and
+        review_period.
+
+        Args:
+            employee_name: Employee whose goals are to be deleted.
+            review_period: Review cycle identifier.
+
+        Raises:
+            ValueError:   If no matching goal document exists.
+            RuntimeError: On any PyMongo failure.
+        """
+        self.get_goal(
+            employee_name,
+            review_period,
+        )
+
+        try:
+            self.goals.delete_one(
+                self._goal_filter(
+                    employee_name,
+                    review_period,
+                )
+            )
+
+        except PyMongoError as exc:
+            logger.error(
+                "delete_goal('%s', '%s') failed: %s",
+                employee_name,
+                review_period,
+                exc,
+            )
+
+            raise RuntimeError(
+                f"Failed to delete goals for '{employee_name}' "
+                f"({review_period}): {exc}"
+            ) from exc
+
+        logger.debug(
+            "Goals for '%s' (%s) deleted.",
+            employee_name,
+            review_period,
+        )
