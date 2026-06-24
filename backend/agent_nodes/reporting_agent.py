@@ -44,13 +44,13 @@ class ReportingAgent(BaseAgent):
 
     def generate_hiring_summary(self, state: AgentState) -> dict:
         prompt = f"""
-        You are an HR reporting expert. Summarize the hiring workflow results below.
-        Return ONLY a raw JSON object — no markdown, no extra keys.
+        You are an HR reporting expert. Analyze the hiring workflow data below and write a real summary.
+        Do not copy placeholders. Do not repeat these instructions. Return only valid JSON.
 
         Output format:
         {{
-            "executive_summary": "2-sentence summary of hiring outcomes and candidate pipeline.",
-            "system_actions": ["Hiring recommendation 1", "Hiring recommendation 2"]
+            "executive_summary": "<generated summary>",
+            "system_actions": ["<recommendation 1>", "<recommendation 2>"]
         }}
 
         Workflow Data: {json.dumps(state.outputs)}
@@ -59,13 +59,13 @@ class ReportingAgent(BaseAgent):
 
     def generate_campaign_summary(self, state: AgentState) -> dict:
         prompt = f"""
-        You are a sales reporting expert. Summarize the sales campaign results below.
-        Return ONLY a raw JSON object — no markdown, no extra keys.
+        You are a sales reporting expert. Analyze the sales campaign data below and write a real summary.
+        Do not copy placeholders. Do not repeat these instructions. Return only valid JSON.
 
         Output format:
         {{
-            "executive_summary": "2-sentence summary of campaign performance and ROI.",
-            "system_actions": ["Campaign recommendation 1", "Campaign recommendation 2"]
+            "executive_summary": "<generated summary>",
+            "system_actions": ["<recommendation 1>", "<recommendation 2>"]
         }}
 
         Workflow Data: {json.dumps(state.outputs)}
@@ -74,13 +74,13 @@ class ReportingAgent(BaseAgent):
 
     def generate_review_summary(self, state: AgentState) -> dict:
         prompt = f"""
-        You are a performance review reporting expert. Summarize the review cycle results below.
-        Return ONLY a raw JSON object — no markdown, no extra keys.
+        You are a performance review expert. Analyze the review cycle data below and write a real summary.
+        Do not copy placeholders. Do not repeat these instructions. Return only valid JSON.
 
         Output format:
         {{
-            "executive_summary": "2-sentence summary of employee performance trends.",
-            "system_actions": ["Performance recommendation 1", "Performance recommendation 2"]
+            "executive_summary": "<generated summary>",
+            "system_actions": ["<recommendation 1>", "<recommendation 2>"]
         }}
 
         Workflow Data: {json.dumps(state.outputs)}
@@ -89,13 +89,13 @@ class ReportingAgent(BaseAgent):
 
     def generate_executive_summary(self, state: AgentState) -> dict:
         prompt = f"""
-        You are a C-suite reporting expert. Produce a high-level executive summary of the workflow below.
-        Return ONLY a raw JSON object — no markdown, no extra keys.
+        You are a C-suite reporting expert. Analyze the workflow data below and write a real board-level summary.
+        Do not copy placeholders. Do not repeat these instructions. Return only valid JSON.
 
         Output format:
         {{
-            "executive_summary": "2-sentence board-level summary of outcomes and business impact.",
-            "system_actions": ["Strategic recommendation 1", "Strategic recommendation 2"]
+            "executive_summary": "<generated summary>",
+            "system_actions": ["<recommendation 1>", "<recommendation 2>"]
         }}
 
         Workflow Data: {json.dumps(state.outputs)}
@@ -104,13 +104,13 @@ class ReportingAgent(BaseAgent):
 
     def generate_recommendations(self, state: AgentState) -> dict:
         prompt = f"""
-        You are an operations analyst. Based on the workflow data below, generate actionable recommendations.
-        Return ONLY a raw JSON object — no markdown, no extra keys.
+        You are an operations analyst. Analyze the workflow data below and generate real actionable recommendations.
+        Do not copy placeholders. Do not repeat these instructions. Return only valid JSON.
 
         Output format:
         {{
-            "executive_summary": "2-sentence overview of the key areas needing improvement.",
-            "system_actions": ["Recommendation 1", "Recommendation 2", "Recommendation 3"]
+            "executive_summary": "<generated summary>",
+            "system_actions": ["<recommendation 1>", "<recommendation 2>", "<recommendation 3>"]
         }}
 
         Workflow Data: {json.dumps(state.outputs)}
@@ -119,13 +119,13 @@ class ReportingAgent(BaseAgent):
 
     def aggregate_results(self, state: AgentState) -> dict:
         prompt = f"""
-        You are a data aggregation expert. Consolidate the multi-agent workflow results below into a unified summary.
-        Return ONLY a raw JSON object — no markdown, no extra keys.
+        You are a data aggregation expert. Analyze the multi-agent workflow results below and write a real consolidated summary.
+        Do not copy placeholders. Do not repeat these instructions. Return only valid JSON.
 
         Output format:
         {{
-            "executive_summary": "2-sentence summary of the aggregated results across all agents.",
-            "system_actions": ["Aggregated insight 1", "Aggregated insight 2"]
+            "executive_summary": "<generated summary>",
+            "system_actions": ["<recommendation 1>", "<recommendation 2>"]
         }}
 
         Workflow Data: {json.dumps(state.outputs)}
@@ -134,13 +134,13 @@ class ReportingAgent(BaseAgent):
 
     def generate_kpi_dashboard(self, state: AgentState) -> dict:
         prompt = f"""
-        You are a KPI analyst. Extract and summarize the key performance indicators from the workflow data below.
-        Return ONLY a raw JSON object — no markdown, no extra keys.
+        You are a KPI analyst. Analyze the workflow data below and extract real key performance indicators.
+        Do not copy placeholders. Do not repeat these instructions. Return only valid JSON.
 
         Output format:
         {{
-            "executive_summary": "2-sentence summary of KPI performance against targets.",
-            "system_actions": ["KPI action 1", "KPI action 2"]
+            "executive_summary": "<generated summary>",
+            "system_actions": ["<recommendation 1>", "<recommendation 2>"]
         }}
 
         Workflow Data: {json.dumps(state.outputs)}
@@ -177,13 +177,13 @@ class ReportingAgent(BaseAgent):
 
     def generate_narrative_insights(self, log_data: dict, processed_kpis: dict) -> dict:
         prompt = f"""
-        You are an expert executive reporting agent. Analyze the workflow data below.
-        You must return ONLY a raw JSON object. Do NOT include markdown blocks like ```json.
+        You are an expert executive reporting agent. Analyze the workflow data below and write a real summary.
+        Do not copy placeholders. Do not repeat these instructions. Return only valid JSON.
 
-        Your output MUST exactly match this format:
+        Output format:
         {{
-            "executive_summary": "A 2-sentence executive summary of the runtime and success rate.",
-            "system_actions": ["Technical recommendation 1", "Technical recommendation 2"]
+            "executive_summary": "<generated summary>",
+            "system_actions": ["<recommendation 1>", "<recommendation 2>"]
         }}
 
         Workflow Data: {json.dumps(log_data)}
