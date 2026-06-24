@@ -119,6 +119,98 @@ def get_workflows_collection() -> Collection:
     return get_client()[db_name]["workflows"]
 
 
+# ---------------------------------------------------------------------------
+# Data-layer collections — used by data_loader.py
+# Each function follows the identical pattern as get_workflows_collection().
+# Called fresh on every data_loader invocation — no caching.
+# ---------------------------------------------------------------------------
+
+def get_employees_collection() -> Collection:
+    """
+    Return the 'employees' collection from the configured database.
+
+    Populated by seed_data.py from employees.json.
+    Frontend CRUD operations write directly to this collection;
+    every data_loader call fetches the latest state.
+
+    Returns:
+        pymongo Collection object for employee documents.
+    """
+    db_name: str = os.getenv("MONGO_DB_NAME", _DEFAULT_DB_NAME)
+    return get_client()[db_name]["employees"]
+
+
+def get_roles_collection() -> Collection:
+    """
+    Return the 'roles' collection from the configured database.
+
+    Populated by seed_data.py, which flattens departments.json into
+    one document per role, each carrying its parent department's
+    location and rating_scale fields.
+
+    Returns:
+        pymongo Collection object for role documents.
+    """
+    db_name: str = os.getenv("MONGO_DB_NAME", _DEFAULT_DB_NAME)
+    return get_client()[db_name]["roles"]
+
+
+def get_goals_collection() -> Collection:
+    """
+    Return the 'goals' collection from the configured database.
+
+    Populated by seed_data.py from goals.json.
+
+    Returns:
+        pymongo Collection object for goal documents.
+    """
+    db_name: str = os.getenv("MONGO_DB_NAME", _DEFAULT_DB_NAME)
+    return get_client()[db_name]["goals"]
+
+
+def get_products_collection() -> Collection:
+    """
+    Return the 'products' collection from the configured database.
+
+    Populated by seed_data.py from products.json.
+
+    Returns:
+        pymongo Collection object for product documents.
+    """
+    db_name: str = os.getenv("MONGO_DB_NAME", _DEFAULT_DB_NAME)
+    return get_client()[db_name]["products"]
+
+
+def get_candidates_collection() -> Collection:
+    """
+    Return the 'candidates' collection from the configured database.
+
+    Populated by seed_data.py from candidates.json.
+
+    Returns:
+        pymongo Collection object for candidate documents.
+    """
+    db_name: str = os.getenv("MONGO_DB_NAME", _DEFAULT_DB_NAME)
+    return get_client()[db_name]["candidates"]
+
+
+def get_reports_collection() -> Collection:
+    """
+    Return the 'reports' collection from the configured database.
+
+    Populated by seed_data.py from reports.json.
+
+    Returns:
+        pymongo Collection object for report documents.
+    """
+
+    db_name: str = os.getenv(
+        "MONGO_DB_NAME",
+        _DEFAULT_DB_NAME
+    )
+    return get_client()[db_name]["reports"]
+
+
 def close_client() -> None:
     """
     Close the MongoClient and release its connection pool.
