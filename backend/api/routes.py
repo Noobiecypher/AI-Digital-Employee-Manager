@@ -15,9 +15,7 @@ from backend.planner.workflow_definitions import WORKFLOWS
 from backend.api.schemas import TaskOutputItem
 
 # --- REPORTING AGENT ADDITIONS ---
-import os
-import json
-from backend.tools.reporting_tools import calculate_workflow_metrics
+from backend.services.analytics_service import (generate_analytics_payload)
 from backend.agent_nodes.reporting_agent import ReportingAgent
 # ---------------------------------
 
@@ -231,7 +229,7 @@ def build_workflow_response(state) -> WorkflowResponse:
 
         task_outputs=task_outputs,
         result=result,
-        
+
         created_at=workflow_meta.get(
             "created_at"
         ),
@@ -488,48 +486,57 @@ async def list_workflows_route(
     status_code=200,
 )
 async def get_latest_report():
-    """
-    Simulates fetching raw metrics from the Workflow Engine database,
-    processing them through the Reporting Agent pipeline, and delivering them to the UI.
-    """
+
     if _reporting_agent is None:
         raise HTTPException(
-            status_code=500, 
-            detail="Reporting Agent uninitialized. Ensure that Ollama is running locally on your computer with the 'qwen2.5:1.5b' model active."
+            status_code=500,
+            detail=(
+                "Reporting Agent uninitialized. "
+                "Ensure that Ollama is running "
+                "locally on your computer with "
+                "the 'qwen2.5:1.5b' model active."
+            )
         )
-        
+
     try:
-        # Adjusted path pointing directly to the group's unified mock_data directory
-        json_path = os.path.join("backend", "mock_data", "reports.json")
-        
-        # 1. Read the mock data payload simulating live system states
-        with open(json_path, "r") as file:
-            raw_logs = json.load(file)
-        
-        # 2. Run numerical transformations for charts
-        structured_kpis = calculate_workflow_metrics(raw_logs)
-        
-        # 3. Request qualitative summaries from the Reporting Agent
-        ai_insights = _reporting_agent.generate_narrative_insights(raw_logs, structured_kpis)
-        
-        # 4. Construct unified interface payload
-        return {
-            "workflow_id": raw_logs.get("workflow_id", "unknown"),
-            "success": True,
-            "metrics": structured_kpis["ui_kpi_cards"],
-            "charts": structured_kpis["ui_chart_series"],
-            "insights": ai_insights
-        }
-        
-    except FileNotFoundError:
-        raise HTTPException(
-            status_code=500, 
-            detail="Configuration Error: 'backend/mock_data/reports.json' could not be resolved."
+
+        analytics = (
+            generate_analytics_payload()
         )
+
+        ai_insights = (
+            _reporting_agent
+            .generate_narrative_insights(
+                analytics["reporting_input"],
+                analytics["metrics"],
+            )
+        )
+
+        return {
+            "workflow_id": "analytics",
+            "success": True,
+
+            "metrics":
+                analytics["metrics"],
+
+            "charts":
+                analytics["charts"],
+
+            "objective_distribution":
+                analytics["objective_distribution"],    
+
+            "insights":
+                ai_insights,
+        }
+
     except Exception as e:
+
         raise HTTPException(
-            status_code=500, 
-            detail=f"Internal Server Pipeline Error: {str(e)}"
+            status_code=500,
+            detail=(
+                "Internal Server Pipeline Error: "
+                f"{str(e)}"
+            )
         )
 # -----------------------------
 

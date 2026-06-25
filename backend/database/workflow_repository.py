@@ -211,6 +211,33 @@ class WorkflowRepository:
             raise RuntimeError(
                 f"Failed to list workflow IDs: {exc}"
             ) from exc
+    
+    def list_workflow_states(self,) -> list[AgentState]:
+
+        try:
+            cursor = self.collection.find(
+                {},
+                {"state": 1, "_id": 0},
+                sort=[("created_at", 1)]
+            )
+
+            return [
+                AgentState.model_validate(
+                    doc["state"]
+                )
+                for doc in cursor
+            ]
+
+        except PyMongoError as exc:
+            logger.error(
+                "Failed to fetch workflow states: %s",
+                exc,
+            )
+
+            raise RuntimeError(
+                f"Failed to fetch workflow states: {exc}"
+            ) from exc
+
 
     def get_timestamps(self, workflow_id: str) -> dict[str, str | None]:
         """
