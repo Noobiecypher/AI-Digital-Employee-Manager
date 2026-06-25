@@ -9,7 +9,11 @@
       "Docker",
       "PostgreSQL",
       "Redis"
-    ]
+    ],
+    "candidate_id": "8b9ac807-44b0-4c3f-824f-4540495de0e5",
+    "resume_filename": null,
+    "resume_url": null,
+    "resume_uploaded_at": null
   },
   {
     "name": "Karan Bose",
@@ -19,7 +23,11 @@
       "Python",
       "PostgreSQL",
       "Docker"
-    ]
+    ],
+    "candidate_id": "ca215457-ba33-4041-add6-491dfc6e0626",
+    "resume_filename": null,
+    "resume_url": null,
+    "resume_uploaded_at": null
   },
   {
     "name": "Sneha Iyer",
@@ -29,7 +37,11 @@
       "Python",
       "FastAPI",
       "Redis"
-    ]
+    ],
+    "candidate_id": "2a64e6ba-51df-4cf8-8bb6-0b5c997ca892",
+    "resume_filename": null,
+    "resume_url": null,
+    "resume_uploaded_at": null
   },
   {
     "name": "Mihir Patel",
@@ -41,7 +53,11 @@
       "TailwindCSS",
       "HTML",
       "CSS"
-    ]
+    ],
+    "candidate_id": "3e2e8c75-f9b5-4254-a7db-8d81228e7ab5",
+    "resume_filename": null,
+    "resume_url": null,
+    "resume_uploaded_at": null
   },
   {
     "name": "Divya Nair",
@@ -51,7 +67,11 @@
       "React",
       "HTML",
       "CSS"
-    ]
+    ],
+    "candidate_id": "bc9ee298-c03d-4b7e-9f48-237f08da031e",
+    "resume_filename": null,
+    "resume_url": null,
+    "resume_uploaded_at": null
   },
   {
     "name": "Arjun Ghosh",
@@ -61,6 +81,10 @@
       "CRM Tools",
       "Cold Outreach",
       "Excel"
-    ]
+    ],
+    "candidate_id": "af83dd14-e7b3-4fb2-ba45-fd22f101de81",
+    "resume_filename": null,
+    "resume_url": null,
+    "resume_uploaded_at": null
   }
 ]

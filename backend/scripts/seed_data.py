@@ -35,6 +35,7 @@ Collections produced
 import json
 import os
 import sys
+import uuid
 
 # ---------------------------------------------------------------------------
 # Path setup — allows running as a script from any working directory

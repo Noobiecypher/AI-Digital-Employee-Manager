@@ -8,7 +8,7 @@ This is the ONLY module that reads from or writes to:
     candidates  — full CRUD  (candidate_id auto-generated as UUID4)
     products    — full CRUD  (product_name is the business key)
     goals       — full CRUD
-    roles       — read-only  (managed by seed_data.py)
+    roles       — full CRUD  (workflow configuration + enrichment data)
 
 No other module constructs queries or touches these collections directly.
 
@@ -27,6 +27,7 @@ MongoDB conventions
 - employee_id  — caller-supplied business key (e.g. "EMP001").
 - candidate_id — UUID4 string generated server-side on insert.
 - product_name — caller-supplied unique name used as the URL key.
+- role         — caller-supplied unique name used as the URL key.
 - No direct MongoClient construction; all collections resolved via mongo.py.
 
 Resume extensibility
@@ -41,9 +42,10 @@ No schema migration is required when that feature ships.
 
 Case-insensitive matching
 -------------------------
-product_name lookups use $regex / $options:"i" (re.escape applied),
-mirroring the convention in data_loader.py. employee_id lookups use
-exact string match (business keys are treated as case-sensitive tokens).
+product_name and role lookups use $regex / $options:"i"
+(re.escape applied), mirroring the convention in data_loader.py.
+employee_id lookups use exact string match (business keys are
+treated as case-sensitive tokens).
 
 Dependency injection
 --------------------
@@ -120,9 +122,13 @@ class BusinessDataRepository:
     update_product(product_name, updates)     → dict
     delete_product(product_name)              → None
 
-    Methods — Roles (read-only)
-    ---------------------------
-    list_roles()                              → list[dict]
+    Methods — Roles
+    ---------------
+    list_roles()                → list[dict]
+    get_role(role)              → dict
+    create_role(data)           → dict
+    update_role(role, updates)  → dict
+    delete_role(role)           → None
     
     Methods — Goals
     ----------------
@@ -869,20 +875,18 @@ class BusinessDataRepository:
         logger.debug("Product '%s' deleted.", product_name)
 
     # ==================================================================
-    # ROLES  (read-only)
+    # ROLES 
     # ==================================================================
 
     def list_roles(self) -> list[dict]:
         """
-        Return all role documents, sorted by department then role ascending.
+        Return all role documents.
 
-        Roles are read-only from the CRUD perspective — they are seeded by
-        seed_data.py and consumed by data_loader.py for workflow parameter
-        enrichment. This method exists solely to power the GET /roles
-        endpoint for frontend dropdowns and form validation.
+        Roles are stored as flat MongoDB documents and are used by
+        workflow execution for parameter enrichment and validation.
 
         Returns:
-            List of role dicts with _id excluded.
+            List of role documents sorted by department then role name.
 
         Raises:
             RuntimeError: On any PyMongo failure.
@@ -904,6 +908,144 @@ class BusinessDataRepository:
                 f"Failed to list roles: {exc}"
             ) from exc
         
+
+    def get_role(self, role: str) -> dict:
+        """
+        Retrieve a single role document by role name.
+
+        Role lookup is case-insensitive.
+
+        Args:
+            role: Role name.
+
+        Returns:
+            Role document without _id.
+
+        Raises:
+            ValueError: If the role does not exist.
+            RuntimeError: On any PyMongo failure.
+        """
+        try:
+            doc = self.roles.find_one(
+                self._case_insensitive_filter("role", role),
+                {"_id": 0},
+            )
+        except PyMongoError as exc:
+            raise RuntimeError(
+                f"Failed to retrieve role '{role}': {exc}"
+            ) from exc
+
+        if doc is None:
+            raise ValueError(f"Role '{role}' not found")
+
+        return doc
+
+
+    def create_role(self, data: dict) -> dict:
+        """
+        Insert a new role document.
+
+        Performs a case-insensitive uniqueness check on role.
+
+        Args:
+            data: Dict from RoleCreateRequest.model_dump().
+
+        Returns:
+            Inserted role document without _id.
+
+        Raises:
+            ValueError: If the role already exists.
+            RuntimeError: On any PyMongo failure.
+        """
+        role = data["role"]
+
+        existing = self.roles.find_one(
+            self._case_insensitive_filter("role", role),
+            {"_id": 0},
+        )
+
+        if existing is not None:
+            raise ValueError(
+                f"Role '{role}' already exists"
+            )
+
+        document = {**data}
+
+        try:
+            self.roles.insert_one(document)
+        except PyMongoError as exc:
+            raise RuntimeError(
+                f"Failed to create role '{role}': {exc}"
+            ) from exc
+
+        return self._strip_id(document)
+    
+
+    def update_role(
+        self,
+        role: str,
+        updates: dict,
+    ) -> dict:
+        
+        """
+        Apply partial updates to an existing role document.
+
+        The role name is the immutable business key and must not
+        appear in updates.
+
+        Args:
+            role: Role name.
+            updates: Dict of field-value pairs to update.
+
+        Returns:
+            Updated role document without _id.
+
+        Raises:
+            ValueError: If the role does not exist.
+            RuntimeError: On any PyMongo failure.
+        """
+
+        self.get_role(role)
+
+        if not updates:
+            return self.get_role(role)
+
+        try:
+            self.roles.update_one(
+                self._case_insensitive_filter("role", role),
+                {"$set": updates},
+            )
+        except PyMongoError as exc:
+            raise RuntimeError(
+                f"Failed to update role '{role}': {exc}"
+            ) from exc
+
+        return self.get_role(role)
+    
+    
+    def delete_role(self, role: str) -> None:
+
+        """
+        Delete a role document by role name.
+
+        Args:
+            role: Role name.
+
+        Raises:
+            ValueError: If the role does not exist.
+            RuntimeError: On any PyMongo failure.
+        """
+
+        self.get_role(role)
+
+        try:
+            self.roles.delete_one(
+                self._case_insensitive_filter("role", role)
+            )
+        except PyMongoError as exc:
+            raise RuntimeError(
+                f"Failed to delete role '{role}': {exc}"
+            ) from exc
 
     # ==================================================================
     # GOALS

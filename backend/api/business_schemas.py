@@ -30,6 +30,7 @@ These identifier fields are intentionally absent from every Update schema:
     CandidateUpdateRequest — candidate_id, match_score (workflow-managed)
     ProductUpdateRequest   — product_name
     GoalUpdateRequest      — employee_name, review_period
+    RoleUpdateRequest      — role
 
 Resume extensibility
 --------------------
@@ -49,7 +50,8 @@ Schema index
                CandidateResponse, CandidateListResponse
   Products   : ProductCreateRequest, ProductUpdateRequest,
                ProductResponse, ProductListResponse
-  Roles      : RoleResponse, RoleListResponse          (read-only)
+  Roles      : RoleCreateRequest, RoleUpdateRequest,
+               RoleResponse, RoleListResponse
   Goals      : GoalCreateRequest, GoalUpdateRequest,
                GoalResponse, GoalListResponse
 """
@@ -501,17 +503,18 @@ class ProductListResponse(BaseModel):
 
 
 # ==============================================================
-# ROLES  (read-only)
+# ROLES
 # ==============================================================
 
 class RoleResponse(BaseModel):
     """
     Role document returned to the frontend.
 
-    Mirrors the dict shape returned by data_loader.get_role_info() so
-    the workflow engine and the frontend always see consistent data.
-    Roles are read-only through the CRUD API; they are seeded and
-    updated via seed_data.py only.
+    Mirrors the dict shape returned by data_loader.get_role_info()
+    so the workflow engine and the frontend always see consistent data.
+
+    Roles can be managed through the CRUD API and are consumed by
+    workflow execution for parameter enrichment and validation.
 
     Extra fields from MongoDB documents are silently ignored.
     """
@@ -534,6 +537,72 @@ class RoleListResponse(BaseModel):
     total: int
     items: list[RoleResponse]
 
+class RoleCreateRequest(BaseModel):
+    """
+    Payload for POST /api/roles.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    department: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+    )
+    role: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+    )
+    experience_years: int = Field(
+        default=0,
+        ge=0,
+        le=60,
+    )
+    skills_required: list[str] = Field(
+        default_factory=list
+    )
+    location: str = Field(
+        default="",
+        max_length=100,
+    )
+    rating_scale: int = Field(
+        default=5,
+        ge=1,
+        le=10,
+    )
+    salary_range: str = Field(
+        default="",
+        max_length=100,
+    )
+    onboarding_checklist: list[str] = Field(
+        default_factory=list
+    )
+
+
+class RoleUpdateRequest(BaseModel):
+    """
+    Payload for PUT /api/roles/{role}.
+    role is immutable.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    department: str | None = None
+    experience_years: int | None = Field(
+        default=None,
+        ge=0,
+        le=60,
+    )
+    skills_required: list[str] | None = None
+    location: str | None = None
+    rating_scale: int | None = Field(
+        default=None,
+        ge=1,
+        le=10,
+    )
+    salary_range: str | None = None
+    onboarding_checklist: list[str] | None = None
 
 # ==============================================================
 # GOALS

@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api.routes import router
+from backend.api.business_routes import business_router
 from backend.database.mongo import close_client, get_client
 
 logger = logging.getLogger(__name__)
@@ -47,6 +48,12 @@ app.include_router(
     router,
     prefix="/workflows",
     tags=["workflows"],
+)
+
+app.include_router(
+    business_router,
+    prefix="/api",
+    tags=["business-data"],
 )
 
 
