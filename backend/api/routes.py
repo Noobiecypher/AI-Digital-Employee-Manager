@@ -11,6 +11,8 @@ from fastapi import (
 )
 
 from pydantic import ValidationError
+from backend.planner.workflow_definitions import WORKFLOWS
+from backend.api.schemas import TaskOutputItem
 
 # --- REPORTING AGENT ADDITIONS ---
 import os
@@ -180,6 +182,34 @@ def build_workflow_response(state) -> WorkflowResponse:
         last_task = state.completed_tasks[-1]
         result = state.outputs.get(last_task)
 
+    task_outputs = []
+
+    workflow_tasks = WORKFLOWS.get(
+        state.objective_id,
+        []
+    )
+
+    for task in workflow_tasks:
+
+        if task.task_id not in state.outputs:
+            continue
+
+        task_outputs.append(
+            TaskOutputItem(
+                task_id=task.task_id,
+
+                task_name=(
+                    task.action
+                    .replace("_", " ")
+                    .title()
+                ),
+
+                output=state.outputs[
+                    task.task_id
+                ]
+            )
+        )    
+
     return WorkflowResponse(
         workflow_id=state.workflow_id,
         objective_id=state.objective_id,
@@ -195,9 +225,13 @@ def build_workflow_response(state) -> WorkflowResponse:
             and state.awaiting_human_input
             else None
         ),
+
         human_feedback=state.human_feedback,
         error_message=state.error_message,
+
+        task_outputs=task_outputs,
         result=result,
+        
         created_at=workflow_meta.get(
             "created_at"
         ),

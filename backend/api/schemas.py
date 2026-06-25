@@ -7,6 +7,12 @@ from pydantic import BaseModel, Field
 from enum import Enum
 
 
+class TaskOutputItem(BaseModel):
+    task_id: str
+    task_name: str
+    output: dict[str, Any] | None = None
+
+
 class WorkflowStatus(str, Enum):
     RUNNING = "running"
     PAUSED = "paused"
@@ -63,7 +69,8 @@ class WorkflowResponse(BaseModel):
 
     human_feedback: str | None = None
     error_message: str | None = None
-
+    
+    task_outputs: list[TaskOutputItem] | None = None
     result: dict[str, Any] | None = None
 
     created_at: str | None = None
