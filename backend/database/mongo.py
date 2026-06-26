@@ -36,7 +36,7 @@ from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymongo.errors import ConfigurationError, ConnectionFailure
 
-load_dotenv()
+load_dotenv(override=True)
 
 logger = logging.getLogger(__name__)
 
