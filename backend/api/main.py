@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api.routes import router
 from backend.api.business_routes import business_router
+from backend.api.auth_routes import auth_router
 from backend.database.mongo import close_client, get_client
 
 logger = logging.getLogger(__name__)
@@ -54,6 +55,12 @@ app.include_router(
     business_router,
     prefix="/api",
     tags=["business-data"],
+)
+
+app.include_router(
+    auth_router,
+    prefix="/auth",
+    tags=["authentication"]
 )
 
 

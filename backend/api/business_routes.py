@@ -86,6 +86,11 @@ import logging
 
 from fastapi import APIRouter, HTTPException, Response, status
 
+from fastapi import Depends
+
+from backend.auth.dependencies import require_permission
+from backend.auth.permissions import Permission
+
 from backend.database.business_data_repository import BusinessDataRepository
 from backend.api.business_schemas import (
     # Employees
@@ -197,7 +202,14 @@ def _clean_updates(data: dict) -> dict:
         "The `total` field reflects the full collection size."
     ),
 )
-async def list_employees() -> EmployeeListResponse:
+async def list_employees(
+    _: dict = Depends(
+        require_permission(
+            Permission.EMPLOYEES_READ
+        )
+    ),
+) -> EmployeeListResponse:
+    
     """Retrieve all employees from the employees collection."""
     try:
         employees = _repo.list_employees()
@@ -224,7 +236,15 @@ async def list_employees() -> EmployeeListResponse:
         "(e.g. 'EMP001'). employee_id matching is case-sensitive."
     ),
 )
-async def get_employee(employee_id: str) -> EmployeeResponse:
+async def get_employee(
+    employee_id: str,
+    _: dict = Depends(
+        require_permission(
+            Permission.EMPLOYEES_READ
+        )
+    ),
+) -> EmployeeResponse:
+    
     """Retrieve a single employee by business key."""
     try:
         employee = _repo.get_employee(employee_id)
@@ -257,7 +277,15 @@ async def get_employee(employee_id: str) -> EmployeeResponse:
         "taken."
     ),
 )
-async def create_employee(body: EmployeeCreateRequest) -> EmployeeResponse:
+async def create_employee(
+    body: EmployeeCreateRequest,
+    _: dict = Depends(
+        require_permission(
+            Permission.EMPLOYEES_CREATE
+        )
+    ),
+) -> EmployeeResponse:
+    
     """Create a new employee. Returns 409 if employee_id already exists."""
     try:
         employee = _repo.create_employee(body.model_dump())
@@ -299,7 +327,13 @@ async def create_employee(body: EmployeeCreateRequest) -> EmployeeResponse:
 async def update_employee(
     employee_id: str,
     body: EmployeeUpdateRequest,
+    _: dict = Depends(
+        require_permission(
+            Permission.EMPLOYEES_UPDATE
+        )
+    ),
 ) -> EmployeeResponse:
+    
     """Partially update an existing employee. Returns 404 if not found."""
     updates = _clean_updates(body.model_dump())
 
@@ -336,7 +370,15 @@ async def update_employee(
         "Returns 204 No Content on success, 404 if the employee does not exist."
     ),
 )
-async def delete_employee(employee_id: str) -> Response:
+async def delete_employee(
+    employee_id: str,
+    _: dict = Depends(
+        require_permission(
+            Permission.EMPLOYEES_DELETE
+        )
+    ),
+) -> Response:
+    
     """Delete an employee by business key. Returns 204 on success."""
     try:
         _repo.delete_employee(employee_id)
@@ -377,7 +419,14 @@ async def delete_employee(employee_id: str) -> Response:
         "until the future resume-upload endpoint populates them."
     ),
 )
-async def list_candidates() -> CandidateListResponse:
+async def list_candidates(
+    _: dict = Depends(
+        require_permission(
+            Permission.CANDIDATES_READ
+        )
+),
+) -> CandidateListResponse:
+    
     """Retrieve all candidates from the candidates collection."""
     try:
         candidates = _repo.list_candidates()
@@ -404,7 +453,15 @@ async def list_candidates() -> CandidateListResponse:
         "candidate_id. The response includes resume extensibility fields."
     ),
 )
-async def get_candidate(candidate_id: str) -> CandidateResponse:
+async def get_candidate(
+    candidate_id: str,
+    _: dict = Depends(
+        require_permission(
+            Permission.CANDIDATES_READ
+        )
+    ),                    
+) -> CandidateResponse:
+    
     """Retrieve a single candidate by UUID candidate_id."""
     try:
         candidate = _repo.get_candidate(candidate_id)
@@ -442,7 +499,15 @@ async def get_candidate(candidate_id: str) -> CandidateResponse:
         "dedicated resume-upload endpoint."
     ),
 )
-async def create_candidate(body: CandidateCreateRequest) -> CandidateResponse:
+async def create_candidate(
+    body: CandidateCreateRequest,
+    _: dict = Depends(
+        require_permission(
+            Permission.CANDIDATES_CREATE
+        )
+    ),
+) -> CandidateResponse:
+    
     """
     Create a new candidate. candidate_id is server-generated (UUID4).
 
@@ -478,6 +543,11 @@ async def create_candidate(body: CandidateCreateRequest) -> CandidateResponse:
 async def update_candidate(
     candidate_id: str,
     body: CandidateUpdateRequest,
+    _: dict = Depends(
+        require_permission(
+            Permission.CANDIDATES_UPDATE
+        )
+    ),
 ) -> CandidateResponse:
     """Partially update an existing candidate. Returns 404 if not found."""
     updates = _clean_updates(body.model_dump())
@@ -515,7 +585,14 @@ async def update_candidate(
         "Returns 204 No Content on success."
     ),
 )
-async def delete_candidate(candidate_id: str) -> Response:
+async def delete_candidate(
+    candidate_id: str,
+    _: dict = Depends(
+        require_permission(
+            Permission.CANDIDATES_DELETE
+        )
+    ),
+) -> Response:
     """Delete a candidate by UUID. Returns 204 on success."""
     try:
         _repo.delete_candidate(candidate_id)
@@ -556,7 +633,13 @@ async def delete_candidate(candidate_id: str) -> Response:
         "the next workflow run."
     ),
 )
-async def list_products() -> ProductListResponse:
+async def list_products(
+    _: dict = Depends(
+        require_permission(
+            Permission.PRODUCTS_READ
+        )
+),
+) -> ProductListResponse:
     """Retrieve all products from the products collection."""
     try:
         products = _repo.list_products()
@@ -584,7 +667,14 @@ async def list_products() -> ProductListResponse:
         "data_loader.get_product(). URL-encode spaces as %20."
     ),
 )
-async def get_product(product_name: str) -> ProductResponse:
+async def get_product(
+    product_name: str,
+    _: dict = Depends(
+        require_permission(
+            Permission.PRODUCTS_READ
+        )
+    ),
+) -> ProductResponse:
     """Retrieve a single product by product_name (case-insensitive)."""
     try:
         product = _repo.get_product(product_name)
@@ -621,7 +711,14 @@ async def get_product(product_name: str) -> ProductResponse:
         "name already exists."
     ),
 )
-async def create_product(body: ProductCreateRequest) -> ProductResponse:
+async def create_product(
+    body: ProductCreateRequest,
+    _: dict = Depends(
+        require_permission(
+            Permission.PRODUCTS_CREATE
+        )
+    ),
+) -> ProductResponse:
     """Create a new product. Returns 409 if product_name already exists."""
     try:
         product = _repo.create_product(body.model_dump())
@@ -663,6 +760,11 @@ async def create_product(body: ProductCreateRequest) -> ProductResponse:
 async def update_product(
     product_name: str,
     body: ProductUpdateRequest,
+    _: dict = Depends(
+        require_permission(
+            Permission.PRODUCTS_UPDATE
+        )
+    ),
 ) -> ProductResponse:
     """Partially update an existing product. Returns 404 if not found."""
     updates = _clean_updates(body.model_dump())
@@ -702,7 +804,14 @@ async def update_product(
         "the enrichment step."
     ),
 )
-async def delete_product(product_name: str) -> Response:
+async def delete_product(
+    product_name: str,
+    _: dict = Depends(
+        require_permission(
+            Permission.PRODUCTS_DELETE
+        )
+    ),
+) -> Response:
     """Delete a product by name. Returns 204 on success."""
     try:
         _repo.delete_product(product_name)
@@ -741,7 +850,13 @@ async def delete_product(product_name: str) -> Response:
         "sorted by employee_name then review_period ascending."
     ),
 )
-async def list_goals() -> GoalListResponse:
+async def list_goals(
+    _: dict = Depends(
+        require_permission(
+            Permission.GOALS_READ
+        )
+),
+) -> GoalListResponse:
     """Retrieve all goal documents from the goals collection."""
     try:
         goals = _repo.list_goals()
@@ -774,6 +889,11 @@ async def list_goals() -> GoalListResponse:
 async def get_goal(
     employee_name: str,
     review_period: str,
+    _: dict = Depends(
+        require_permission(
+            Permission.GOALS_READ
+        )
+    ),
 ) -> GoalResponse:
     """
     Retrieve goals for a specific employee and review period.
@@ -819,7 +939,14 @@ async def get_goal(
         "performance_review workflow."
     ),
 )
-async def create_goal(body: GoalCreateRequest) -> GoalResponse:
+async def create_goal(
+    body: GoalCreateRequest,
+    _: dict = Depends(
+        require_permission(
+            Permission.GOALS_CREATE
+        )
+    ),
+) -> GoalResponse:
     """
     Create a goal record for an employee / review-period combination.
 
@@ -869,6 +996,11 @@ async def update_goal(
     employee_name: str,
     review_period: str,
     body: GoalUpdateRequest,
+    _: dict = Depends(
+        require_permission(
+            Permission.GOALS_UPDATE
+        )
+    ),
 ) -> GoalResponse:
     """
     Partially update goals for an employee / review-period combination.
@@ -917,6 +1049,11 @@ async def update_goal(
 async def delete_goal(
     employee_name: str,
     review_period: str,
+    _: dict = Depends(
+        require_permission(
+            Permission.GOALS_DELETE
+        )
+    ),
 ) -> Response:
     """Delete a goal document by composite key. Returns 204 on success."""
     try:
@@ -958,7 +1095,13 @@ async def delete_goal(
         "Changes made here are immediately visible to future workflow runs."
     ),
 )
-async def list_roles() -> RoleListResponse:
+async def list_roles(
+    _: dict = Depends(
+        require_permission(
+            Permission.BUSINESS_ROLES_READ
+        )
+    ),
+) -> RoleListResponse:
     """Retrieve all role documents."""
     try:
         roles = _repo.list_roles()
@@ -989,6 +1132,11 @@ async def list_roles() -> RoleListResponse:
 )
 async def create_role(
     body: RoleCreateRequest,
+    _: dict = Depends(
+        require_permission(
+            Permission.BUSINESS_ROLES_CREATE
+        )
+    ),
 ) -> RoleResponse:
 
     try:
@@ -1022,7 +1170,14 @@ async def create_role(
         "URL-encode spaces as %20."
     ), 
 )
-async def get_role(role: str) -> RoleResponse:
+async def get_role(
+    role: str,
+    _: dict = Depends(
+        require_permission(
+            Permission.BUSINESS_ROLES_READ
+        )
+    ),
+) -> RoleResponse:
 
     try:
         role_doc = _repo.get_role(role)
@@ -1059,6 +1214,11 @@ async def get_role(role: str) -> RoleResponse:
 async def update_role(
     role: str,
     body: RoleUpdateRequest,
+    _: dict = Depends(
+        require_permission(
+            Permission.BUSINESS_ROLES_UPDATE
+        )
+    ),
 ) -> RoleResponse:
 
     updates = _clean_updates(body.model_dump())
@@ -1098,7 +1258,14 @@ async def update_role(
         "may cause future workflow executions to fail."
     ),
 )
-async def delete_role(role: str) -> Response:
+async def delete_role(
+    role: str,
+    _: dict = Depends(
+        require_permission(
+            Permission.BUSINESS_ROLES_DELETE
+        )
+    ),
+) -> Response:
 
     try:
         _repo.delete_role(role)

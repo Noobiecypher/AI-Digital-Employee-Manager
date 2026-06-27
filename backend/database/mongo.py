@@ -103,6 +103,15 @@ def get_client() -> MongoClient:
 
     return _client
 
+def get_users_collection() -> Collection:
+    """
+    Return the users collection.
+
+    Stores system user accounts for authentication and authorization.
+    Completely separate from the business roles collection.
+    """
+    db_name: str = os.getenv("MONGO_DB_NAME", _DEFAULT_DB_NAME)
+    return get_client()[db_name]["users"]
 
 def get_workflows_collection() -> Collection:
     """
