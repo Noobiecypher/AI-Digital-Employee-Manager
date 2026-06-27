@@ -106,7 +106,8 @@ Filter candidates against role requirements.
 ### Consumed By
 
 * t4 schedule_interviews
-* t5 prepare_offer
+* t5 hr_select_candidates
+* t6 prepare_offer
 
 ---
 
@@ -136,56 +137,27 @@ Create interview schedule for shortlisted candidates.
 
 ---
 
-## t5 - prepare_offer
+## t5 - hr_select_candidates
 
 ### Purpose
 
-Prepare hiring offer for selected candidate.
-
-For MVP, the selected candidate is the candidate with the highest
-match_score from shortlisted_candidates.
+Human task allowing HR to select one or more shortlisted candidates for offer generation.
 
 ### Reads
 
-| Field                  | Source        |
-| ---------------------- | ------------- |
+| Field | Source |
+|--------|--------|
 | shortlisted_candidates | outputs["t3"] |
-| salary_range           | state.params  |
-| location               | state.params  |
-| job_type               | state.params  |
 
 ### Returns
 
 ```python
 {
-    "offer_details": OfferDetails
-}
-```
-
-### Consumed By
-
-* t6 manager_approval
-* t7 generate_hiring_summary
-
----
-
-## t6 - manager_approval
-
-### Purpose
-
-Human approval gate.
-
-### Reads
-
-| Field         | Source        |
-| ------------- | ------------- |
-| offer_details | outputs["t5"] |
-
-### Returns
-
-```python
-{
-    "approval_status": str
+    "approval_status": str,
+    "human_feedback": str | None,
+    "human_input_data": {
+        "selected_candidates": list[str]
+    }
 }
 ```
 
@@ -195,32 +167,102 @@ Approved -> Continue Workflow
 
 Rejected -> Fail Workflow
 
-The Workflow Executor copies:
-
-outputs["t6"]["approval_status"]
-
-to:
-
-state.approval_status
-
-and updates workflow status accordingly.
-
-If approval_status == "approved":
-    continue workflow execution.
-
-If approval_status == "rejected":
-    set state.status = "failed"
-    and stop workflow execution.
-
-
-
 ### Consumed By
 
-* t7 generate_hiring_summary
+* t6 prepare_offer
 
 ---
 
-## t7 - generate_hiring_summary
+## t6 - prepare_offer
+
+### Purpose
+
+Prepare hiring offer(s) for HR-selected candidate(s).
+
+If no HR selection exists, the highest-scoring candidate is selected automatically.
+
+### Reads
+
+| Field | Source |
+|--------|--------|
+| shortlisted_candidates | outputs["t3"] |
+| selected_candidates | outputs["t5"] |
+| salary_range | state.params |
+| location | state.params |
+| job_type | state.params |
+
+### Returns
+
+```python
+{
+    "offer_details": list[OfferDetails]
+}
+```
+
+### Consumed By
+
+* t7 hr_offer_approval
+* t9 generate_hiring_summary
+
+---
+
+## t7 - hr_offer_approval
+
+### Purpose
+
+Human approval gate for generated offers.
+
+### Reads
+
+| Field | Source |
+|--------|--------|
+| offer_details | outputs["t6"] |
+
+### Returns
+
+```python
+{
+    "approval_status": str,
+    "human_feedback": str | None,
+    "human_input_data": dict
+}
+```
+
+### Consumed By
+
+* t8 manager_approval
+
+---
+
+## t8 - manager_approval
+
+### Purpose
+
+Final manager approval for hiring decisions.
+
+### Reads
+
+| Field | Source |
+|--------|--------|
+| offer_details | outputs["t6"] |
+
+### Returns
+
+```python
+{
+    "approval_status": str,
+    "human_feedback": str | None,
+    "human_input_data": dict
+}
+```
+
+### Consumed By
+
+* t9 generate_hiring_summary
+
+---
+
+## t9 - generate_hiring_summary
 
 ### Purpose
 
@@ -228,9 +270,9 @@ Generate final hiring summary.
 
 ### Reads
 
-| Field           | Source         |
-| --------------- | -------------- |
-| offer_details   | outputs["t5"]  |
+| Field | Source |
+|--------|--------|
+| offer_details | outputs["t6"] |
 | approval_status | workflow state |
 
 ### Returns
@@ -240,7 +282,6 @@ Generate final hiring summary.
     "hiring_summary": str
 }
 ```
-
 ---
 
 # ONBOARD EMPLOYEE

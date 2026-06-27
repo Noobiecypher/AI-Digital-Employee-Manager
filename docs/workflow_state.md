@@ -71,10 +71,16 @@ Both fields are cleared (set to `""`) when the workflow reaches a terminal state
 | `approval_status` | `str` | Executor | `pending` \| `approved` \| `rejected` | `pending` |
 | `awaiting_human_input` | `bool` | Executor | `True` \| `False` | `False` |
 | `human_feedback` | `str \| None` | Executor (via API) | Free text or `None` | `None` |
+| `human_input_data` | `dict` | Executor (via API) | Free-form human-provided metadata associated with approval tasks. |
 | `error_message` | `str \| None` | Executor | Error string or `None` | `None` |
 
-`approval_status` and `awaiting_human_input` are only meaningful during or after the `hire_employee` workflow's `t6 manager_approval` gate. They remain at their defaults for all other workflows.
+approval_status and awaiting_human_input are only meaningful during or after human approval gates.
 
+Current human gates:
+
+- hire_employee / t5 / hr_select_candidates
+- hire_employee / t7 / hr_offer_approval
+- hire_employee / t8 / manager_approval
 ---
 
 ## 2. AgentState Initialization
@@ -151,13 +157,18 @@ The `"skipped"` status is reserved for future use (e.g. conditional branching). 
     {"task_id": "t2", "agent": "recruitment", "action": "identify_required_skills",  "status": "started",   "timestamp": "...", "error": None},
     {"task_id": "t2", "agent": "recruitment", "action": "identify_required_skills",  "status": "completed", "timestamp": "...", "error": None},
     # ... t3, t4, t5 ...
-    {"task_id": "t6", "agent": "human",       "action": "manager_approval",          "status": "started",   "timestamp": "...", "error": None},
-    # --- workflow paused here; resumes when API receives decision ---
-    {"task_id": "t6", "agent": "human",       "action": "manager_approval",          "status": "completed", "timestamp": "...", "error": None},
-    {"task_id": "t7", "agent": "reporting",   "action": "generate_hiring_summary",   "status": "started",   "timestamp": "...", "error": None},
-    {"task_id": "t7", "agent": "reporting",   "action": "generate_hiring_summary",   "status": "completed", "timestamp": "...", "error": None},
-]
-```
+    {"task_id": "t5", "agent": "human", "action": "hr_select_candidates", "status": "started", "timestamp": "...", "error": None},
+    {"task_id": "t5", "agent": "human", "action": "hr_select_candidates", "status": "completed", "timestamp": "...", "error": None},
+
+    {"task_id": "t7", "agent": "human", "action": "hr_offer_approval", "status": "started", "timestamp": "...", "error": None},
+    {"task_id": "t7", "agent": "human", "action": "hr_offer_approval", "status": "completed", "timestamp": "...", "error": None},
+
+    {"task_id": "t8", "agent": "human", "action": "manager_approval", "status": "started", "timestamp": "...", "error": None},
+    {"task_id": "t8", "agent": "human", "action": "manager_approval", "status": "completed", "timestamp": "...", "error": None},
+
+    {"task_id": "t9", "agent": "reporting", "action": "generate_hiring_summary", "status": "started", "timestamp": "...", "error": None},
+    {"task_id": "t9", "agent": "reporting", "action": "generate_hiring_summary", "status": "completed", "timestamp": "...", "error": None}
+    ```
 
 ---
 
@@ -209,8 +220,9 @@ The `"skipped"` status is reserved for future use (e.g. conditional branching). 
 |---|---|---|---|
 | _(init)_ | `initialize_state()` called | `running` | All fields at defaults |
 | `running` | Human gate task reached | `paused` | `awaiting_human_input = True`; cursor fields set to gate task |
-| `paused` | `resume_workflow()` called with `"approved"` | `running` | `awaiting_human_input = False`; `approval_status = "approved"`; `human_feedback = <text>`; gate task added to `completed_tasks`; `outputs[gate_id] = {"approval_status": "approved"}` |
-| `paused` | `resume_workflow()` called with `"rejected"` | `failed` | `awaiting_human_input = False`; `approval_status = "rejected"`; `human_feedback = <text>`; `outputs[gate_id] = {"approval_status": "rejected"}`; `error_message` set; cursor cleared |
+| `paused` | `resume_workflow()` called with `"approved"` | `running` | `awaiting_human_input = False`; `approval_status = "approved"`; `human_feedback = <text>`; gate task added to `completed_tasks`; `outputs[gate_id] = {"approval_status": "approved","human_feedback": "<text>","human_input_data": {}}` |
+| `paused` | `resume_workflow()` called with `"rejected"` | `failed` | `awaiting_human_input = False`; `approval_status = "rejected"`; `human_feedback = <text>`; `outputs[gate_id] = {"approval_status": "rejected","human_feedback": "<text>","human_input_data": {}
+}`; `error_message` set; cursor cleared |
 | `running` | All tasks in `completed_tasks` | `completed` | `current_task_id = ""`; `current_agent = ""` |
 | `running` | `AgentExecutionError` raised | `failed` | `error_message = str(e)`; cursor cleared |
 | `running` | Dependency deadlock detected | `failed` | `error_message = "Dependency deadlock: ..."` |
@@ -295,7 +307,12 @@ A task is a human gate if and only if:
 task.agent == "human"
 ```
 
-Currently only `hire_employee / t6 / manager_approval` satisfies this condition.
+Current human gates:
+
+- hire_employee / t5 / hr_select_candidates
+- hire_employee / t7 / hr_offer_approval
+- hire_employee / t8 / manager_approval
+
 The executor must check `task.agent == "human"` before routing to the Agent Router.
 
 ### 6.2 Pause Sequence (Executor)
@@ -313,8 +330,7 @@ When `get_next_task()` returns a task with `agent == "human"`:
    ← DO NOT BLOCK. The executor's call returns here.
 ```
 
-The API layer is responsible for exposing the workflow ID to the frontend so that a
-manager can submit their decision.
+The API layer is responsible for exposing the workflow ID to the frontend so that an authorized user (HR or Manager) can submit their decision.
 
 ### 6.3 Resume Sequence (API → Executor)
 
@@ -326,6 +342,7 @@ def resume_workflow(
     workflow_id: str,
     approval_status: str,             # "approved" | "rejected"
     human_feedback: str | None = None, # Optional comments
+    human_input_data: dict | None = None,
 ) -> AgentState:
 ```
 
@@ -336,12 +353,11 @@ The executor then executes the following steps atomically before any further tas
 2.  Assert state.status == "paused"
         and state.awaiting_human_input == True.
     Raise ValueError if either assertion fails.
-3.  gate_task_id = state.current_task_id   # e.g. "t6"
+3.  gate_task_id = state.current_task_id   # e.g. "t5", "t7", or "t8"
 4.  Set state.awaiting_human_input = False
 5.  Set state.approval_status   = approval_status
 6.  Set state.human_feedback    = human_feedback
-7.  Set state.outputs[gate_task_id] = {"approval_status": approval_status}
-
+7.  Set state.outputs[gate_task_id] = {"approval_status": approval_status,"human_feedback": human_feedback,"human_input_data": human_input_data or {}}
 8a. IF approval_status == "approved":
         state.completed_tasks.append(gate_task_id)
         Append "completed" log entry for gate_task_id.
@@ -363,46 +379,47 @@ The executor then executes the following steps atomically before any further tas
 
 ```python
 # ── After approval ──────────────────────────────────────────
-state.outputs["t6"]           == {"approval_status": "approved"}
+state.outputs[gate_task_id] = {
+    "approval_status": "approved",
+    "human_feedback": human_feedback,
+    "human_input_data": human_input_data or {}
+}
 state.approval_status         == "approved"
 state.awaiting_human_input    == False
 state.human_feedback          == "<manager comment>"  # or None if not provided
-state.completed_tasks         == [..., "t6"]          # t6 now included
-state.status                  == "running"            # continues to t7
+state.completed_tasks == [..., gate_task_id]
+state.status == "running"
 
 # ── After rejection ─────────────────────────────────────────
-state.outputs["t6"]           == {"approval_status": "rejected"}
+state.outputs[gate_task_id] = {
+    "approval_status": "rejected",
+    "human_feedback": human_feedback,
+    "human_input_data": human_input_data or {}
+}
 state.approval_status         == "rejected"
 state.awaiting_human_input    == False
 state.human_feedback          == "<manager comment>"  # or None if not provided
-state.completed_tasks         == [..., "t6"]          # t6 still recorded
+state.completed_tasks == [..., gate_task_id]
 state.status                  == "failed"
 state.error_message           == "Manager rejected offer: <manager comment or (no comment provided)>"
 state.current_task_id         == ""
 state.current_agent           == ""
 ```
 
-### 6.5 What the Reporting Agent (t7) Reads
+### 6.5 What the Reporting Agent (t9) Reads
 
-After an approval, `t7 generate_hiring_summary` reads both:
+After final approval, `t9 generate_hiring_summary` reads:
 
-- `state.outputs["t5"]["offer_details"]` — the prepared offer
-- `state.approval_status` — `"approved"` (from `AgentState` directly, not from `outputs["t6"]`)
+- `state.outputs["t6"]["offer_details"]`
+- `state.approval_status`
 
-Both fields are available on the `AgentState` the agent receives.
-See `task_contracts.md → hire_employee → t7` for the full contract.
+The Reporting Agent receives the full AgentState and may also inspect:
 
-### Approval State Source of Truth
+- `state.outputs["t5"]`
+- `state.outputs["t7"]`
+- `state.outputs["t8"]`
 
-Approval decisions are stored in two locations:
-
-- state.approval_status
-- state.outputs["t6"]["approval_status"]
-
-The authoritative workflow state is state.approval_status.
-
-The output entry exists for consistency with the standard task-output pattern used throughout the workflow engine.
-
+to include human decisions in the final summary.
 ---
 
 ## 7. Output Storage Convention
@@ -423,7 +440,7 @@ state.completed_tasks.append(task.task_id)
 
 ### Rules
 
-- Keys are always the `task_id` string literal (`"t1"`, `"t2"`, … `"t7"`).
+- Keys are always the `task_id` string literal (`"t1"`, `"t2"`, ..., `"t9"`).
 - Values are the exact dict returned by `agent.execute()`.
 - Downstream agents access upstream outputs via `state.outputs["tN"]["key"]`
   or through `BaseAgent.get_output(state, "tN")["key"]`.
@@ -556,6 +573,7 @@ def resume_workflow(
     workflow_id: str,
     approval_status: str,   # "approved" | "rejected"
     human_feedback: str | None = None,
+    human_input_data: dict | None = None,
 ) -> AgentState:
     """
     Resume a paused workflow after the human approval gate.
@@ -847,18 +865,21 @@ Visual DAGs for all six workflows. Arrow direction = "must complete before".
 ### hire_employee (strictly sequential, includes human gate)
 
 ```
-t1 ─► t2 ─► t3 ─► t4 ─► t5 ─► t6[HUMAN] ─► t7
+t1 ─► t2 ─► t3 ─► t4 ─► t5[HR] ─► t6 ─► t7[HR] ─► t8[MANAGER] ─► t9
+
 ```
 
-| Task | Agent | Action |
-|---|---|---|
-| t1 | recruitment | generate_job_description |
-| t2 | recruitment | identify_required_skills |
-| t3 | recruitment | shortlist_candidates |
-| t4 | recruitment | schedule_interviews |
-| t5 | recruitment | prepare_offer |
-| t6 | **human** | **manager_approval** (gate) |
-| t7 | reporting | generate_hiring_summary |
+| Task | Agent       | Action                   |
+| ---- | ----------- | ------------------------ |
+| t1   | recruitment | generate_job_description |
+| t2   | recruitment | identify_required_skills |
+| t3   | recruitment | shortlist_candidates     |
+| t4   | recruitment | schedule_interviews      |
+| t5   | human       | hr_select_candidates     |
+| t6   | recruitment | prepare_offer            |
+| t7   | human       | hr_offer_approval        |
+| t8   | human       | manager_approval         |
+| t9   | reporting   | generate_hiring_summary  |
 
 ---
 
@@ -973,9 +994,11 @@ agents consume via `state.outputs["tN"]["key"]`.
 | hire_employee | t2 | `required_skills` | `list[str]` |
 | hire_employee | t3 | `shortlisted_candidates` | `list[Candidate]` |
 | hire_employee | t4 | `interview_schedule` | `list[InterviewSchedule]` |
-| hire_employee | t5 | `offer_details` | `OfferDetails` |
-| hire_employee | t6 | `approval_status` | `str` |
-| hire_employee | t7 | `hiring_summary` | `str` |
+| hire_employee | t5 | `approval_status`, `human_feedback`, `human_input_data` | `dict` |
+| hire_employee | t6 | `offer_details`  | `list[OfferDetails]` |
+| hire_employee | t7 | `approval_status`, `human_feedback`, `human_input_data` | `dict` |
+| hire_employee | t8 | `approval_status`, `human_feedback`, `human_input_data` | `dict`|
+| hire_employee | t9 | `hiring_summary` | `str`|
 | onboard_employee | t1 | `employee_details` | `EmployeeDetails` |
 | onboard_employee | t2 | `onboarding_plan` | `OnboardingPlan` |
 | onboard_employee | t3 | `welcome_package` | `WelcomePackage` |

@@ -365,6 +365,7 @@ async def resume_workflow_route(
             workflow_id,
             body.approval_status,
             body.human_feedback,
+            body.human_input_data,
         )
 
         return ResumeWorkflowResponse(
@@ -384,6 +385,7 @@ async def resume_workflow_route(
         workflow_id,
         body.approval_status,
         body.human_feedback,
+        body.human_input_data,
     )
 
     return ResumeWorkflowResponse(

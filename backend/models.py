@@ -235,6 +235,9 @@ class Task(BaseModel):
     # Task IDs that must complete before this task can run
     depends_on: list[str]
 
+    # Only used for human tasks
+    approver_role: str | None = None
+
 
 # ==========================================================
 # PLANNER OUTPUT
@@ -309,6 +312,11 @@ class AgentState(BaseModel):
 
     # Manager approval/rejection comments
     human_feedback: str | None = None
+
+    # Additional information provided during approval
+    human_input_data: dict = Field(
+        default_factory=dict
+    )
 
     # Failure reason if status == failed
     error_message: str | None = None
