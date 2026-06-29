@@ -191,7 +191,6 @@ ROLE_PERMISSIONS: dict[SystemRole, frozenset[Permission]] = {
     # responsibility; this layer grants coarse domain access only.
     SystemRole.EMPLOYEE: frozenset({
         Permission.EMPLOYEES_READ,
-        Permission.EMPLOYEES_UPDATE,
         Permission.GOALS_READ,
     }),
 

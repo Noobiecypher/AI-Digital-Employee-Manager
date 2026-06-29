@@ -90,6 +90,11 @@ from fastapi import Depends
 
 from backend.auth.dependencies import require_permission
 from backend.auth.permissions import Permission
+from backend.auth.ownership import (
+    can_access_employee,
+    can_access_candidate,
+    can_access_goal,
+)
 
 from backend.database.business_data_repository import BusinessDataRepository
 from backend.api.business_schemas import (
@@ -203,7 +208,7 @@ def _clean_updates(data: dict) -> dict:
     ),
 )
 async def list_employees(
-    _: dict = Depends(
+    current_user: dict = Depends(
         require_permission(
             Permission.EMPLOYEES_READ
         )
@@ -220,6 +225,18 @@ async def list_employees(
             "INTERNAL_SERVER_ERROR",
             str(exc),
         )
+    
+    if current_user["role"] == "employee":
+
+        employees = [
+            e
+            for e in employees
+            if (
+                e["employee_id"]
+                ==
+                current_user.get("employee_id")
+            )
+        ]
 
     return EmployeeListResponse(
         total=len(employees),
@@ -238,7 +255,7 @@ async def list_employees(
 )
 async def get_employee(
     employee_id: str,
-    _: dict = Depends(
+    current_user: dict = Depends(
         require_permission(
             Permission.EMPLOYEES_READ
         )
@@ -246,6 +263,17 @@ async def get_employee(
 ) -> EmployeeResponse:
     
     """Retrieve a single employee by business key."""
+
+    if not can_access_employee(
+        current_user,
+        employee_id,
+    ):
+        raise error_response(
+            status.HTTP_403_FORBIDDEN,
+            "FORBIDDEN",
+            "You may only access your own employee profile."
+        )
+    
     try:
         employee = _repo.get_employee(employee_id)
     except ValueError as exc:
@@ -420,7 +448,7 @@ async def delete_employee(
     ),
 )
 async def list_candidates(
-    _: dict = Depends(
+    current_user: dict = Depends(
         require_permission(
             Permission.CANDIDATES_READ
         )
@@ -437,6 +465,18 @@ async def list_candidates(
             "INTERNAL_SERVER_ERROR",
             str(exc),
         )
+    
+    if current_user["role"] == "candidate":
+
+        candidates = [
+            c
+            for c in candidates
+            if (
+                c["candidate_id"]
+                ==
+                current_user.get("candidate_id")
+            )
+        ]
 
     return CandidateListResponse(
         total=len(candidates),
@@ -455,7 +495,7 @@ async def list_candidates(
 )
 async def get_candidate(
     candidate_id: str,
-    _: dict = Depends(
+    current_user: dict = Depends(
         require_permission(
             Permission.CANDIDATES_READ
         )
@@ -463,6 +503,17 @@ async def get_candidate(
 ) -> CandidateResponse:
     
     """Retrieve a single candidate by UUID candidate_id."""
+
+    if not can_access_candidate(
+        current_user,
+        candidate_id,
+    ):
+        raise error_response(
+            status.HTTP_403_FORBIDDEN,
+            "FORBIDDEN",
+            "You may only access your own candidate profile."
+        )
+
     try:
         candidate = _repo.get_candidate(candidate_id)
     except ValueError as exc:
@@ -851,7 +902,7 @@ async def delete_product(
     ),
 )
 async def list_goals(
-    _: dict = Depends(
+    current_user: dict = Depends(
         require_permission(
             Permission.GOALS_READ
         )
@@ -867,6 +918,21 @@ async def list_goals(
             "INTERNAL_SERVER_ERROR",
             str(exc),
         )
+    
+    if current_user["role"] == "employee":
+
+        goals = [
+            g
+            for g in goals
+            if (
+                g["employee_name"].lower()
+                ==
+                current_user.get(
+                    "employee_name",
+                    ""
+                ).lower()
+            )
+        ]
 
     return GoalListResponse(
         total=len(goals),
@@ -889,7 +955,7 @@ async def list_goals(
 async def get_goal(
     employee_name: str,
     review_period: str,
-    _: dict = Depends(
+    current_user: dict = Depends(
         require_permission(
             Permission.GOALS_READ
         )
@@ -902,6 +968,15 @@ async def get_goal(
     The repository applies case-insensitive matching, so
     'alice johnson' and 'Alice Johnson' resolve to the same document.
     """
+    if not can_access_goal(
+        current_user,
+        employee_name,
+    ):
+        raise error_response(
+            status.HTTP_403_FORBIDDEN,
+            "FORBIDDEN",
+            "You may only access your own goals."
+        )
     try:
         goal = _repo.get_goal(employee_name, review_period)
     except ValueError as exc:

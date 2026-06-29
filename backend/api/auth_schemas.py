@@ -142,7 +142,9 @@ class UserCreateRequest(BaseModel):
         ),
         examples=["manager"],
     )
-
+    employee_id: str | None = None
+    employee_name: str | None = None
+    candidate_id: str | None = None
 
 class UserUpdateRequest(BaseModel):
     """
@@ -168,7 +170,9 @@ class UserUpdateRequest(BaseModel):
             "Takes effect immediately on the next authenticated request."
         ),
     )
-
+    employee_id: str | None = None
+    employee_name: str | None = None
+    candidate_id: str | None = None
 
 # ==============================================================
 # RESPONSE MODELS
@@ -192,9 +196,17 @@ class UserResponse(BaseModel):
     full_name: str
     role: SystemRole
     is_active: bool
-    created_at: str = Field(description="ISO 8601 UTC creation timestamp.")
-    updated_at: str = Field(description="ISO 8601 UTC last-modified timestamp.")
-
+    created_at: str | None = Field(
+        default=None,
+        description="ISO 8601 UTC creation timestamp."
+        )
+    updated_at: str | None = Field(
+        default=None,
+        description="ISO 8601 UTC last-modified timestamp."
+        )
+    employee_id: str | None = None
+    employee_name: str | None = None
+    candidate_id: str | None = None
 
 class CurrentUserResponse(BaseModel):
     """
@@ -214,3 +226,6 @@ class CurrentUserResponse(BaseModel):
     full_name: str
     role: SystemRole
     is_active: bool
+    employee_id: str | None = None
+    employee_name: str | None = None
+    candidate_id: str | None = None

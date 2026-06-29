@@ -239,6 +239,10 @@ async def create_user(
         "full_name":     body.full_name,
         "role":          body.role.value,   # store the string value, not the enum
         "is_active":     True,
+
+        "employee_id":   body.employee_id,
+        "employee_name": body.employee_name,
+        "candidate_id":  body.candidate_id,
     }
 
     try:
