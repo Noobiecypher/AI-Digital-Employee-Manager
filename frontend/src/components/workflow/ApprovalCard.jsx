@@ -3,6 +3,7 @@ import { STATE_META } from '../../constants/workflowStates'
 
 export default function ApprovalCard({ workflow, onApprove, onReject, loading }) {
   const meta = STATE_META[workflow.state] || {}
+  const workflowId = workflow.workflow_id || workflow._id || workflow.id
 
   return (
     <div style={{
@@ -19,7 +20,7 @@ export default function ApprovalCard({ workflow, onApprove, onReject, loading })
             {workflow.workflow_type?.replace(/_/g, ' ')?.replace(/\b\w/g, c => c.toUpperCase()) || 'Workflow'}
           </div>
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-            ID: {workflow._id || workflow.id}
+            ID: {workflowId}
           </div>
         </div>
         <StatusBadge label={meta.label || workflow.state} color={meta.color} />
@@ -44,7 +45,7 @@ export default function ApprovalCard({ workflow, onApprove, onReject, loading })
 
       <div style={{ display: 'flex', gap: 8 }}>
         <button
-          onClick={() => onApprove(workflow._id || workflow.id)}
+          onClick={() => onApprove(workflowId)}
           disabled={loading}
           style={{
             padding: '7px 16px', borderRadius: 8, fontSize: 13, fontWeight: 500,
@@ -56,7 +57,7 @@ export default function ApprovalCard({ workflow, onApprove, onReject, loading })
           Approve
         </button>
         <button
-          onClick={() => onReject(workflow._id || workflow.id)}
+          onClick={() => onReject(workflowId)}
           disabled={loading}
           style={{
             padding: '7px 16px', borderRadius: 8, fontSize: 13, fontWeight: 500,
