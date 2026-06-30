@@ -512,7 +512,6 @@ Create campaign strategy.
 
 * t4 generate_email_sequence
 * t5 generate_call_scripts
-* t6 generate_campaign_summary
 
 ---
 
@@ -538,7 +537,7 @@ Generate outreach emails.
 
 ### Consumed By
 
-* t6 generate_campaign_summary
+* t6 approve_outreach_campaign
 
 ---
 
@@ -564,23 +563,86 @@ Generate sales call scripts.
 
 ### Consumed By
 
-* t6 generate_campaign_summary
+* t6 approve_outreach_campaign
 
 ---
 
-## t6 - generate_campaign_summary
+## t6 - approve_outreach_campaign
 
 ### Purpose
 
-Generate outreach campaign summary.
+Human approval gate for generated outreach material.
 
 ### Reads
 
-| Field             | Source        |
-| ----------------- | ------------- |
+| Field | Source |
+|--------|--------|
+| email_sequence | outputs["t4"] |
+| call_scripts | outputs["t5"] |
+
+### Returns
+
+```python
+{
+    "approval_status": str,
+    "human_feedback": str | None,
+    "human_input_data": dict
+}
+```
+
+### Special Rule
+
+Approved → Continue workflow execution
+
+Rejected → Fail workflow
+
+### Consumed By
+
+- t7 send_outreach
+
+---
+
+## t7 - send_outreach
+
+### Purpose
+
+Send approved outreach emails.
+
+### Reads
+
+| Field | Source |
+|--------|--------|
+| email_sequence | outputs["t4"] |
+| approval_status | outputs["t6"] |
+
+### Returns
+
+```python
+{
+    "send_statistics": dict
+}
+```
+
+### Consumed By
+
+- t8 generate_campaign_summary
+
+---
+
+## t8 - generate_campaign_summary
+
+### Purpose
+
+Generate final outreach campaign summary.
+
+### Reads
+
+| Field | Source |
+|--------|--------|
 | outreach_strategy | outputs["t3"] |
-| email_sequence    | outputs["t4"] |
-| call_scripts      | outputs["t5"] |
+| email_sequence | outputs["t4"] |
+| call_scripts | outputs["t5"] |
+| send_statistics | outputs["t7"] |
 
 ### Returns
 

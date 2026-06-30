@@ -95,11 +95,11 @@ They are not validation errors and must never be returned as HTTP 422 responses.
 | Status | Meaning | Terminal |
 |--------|---------|----------|
 | `running` | Executor is actively processing tasks | No |
-| `paused` | Halted at human approval gate (`hire_employee` only) | No |
+| `paused` | Halted at human approval gate  | No |
 | `completed` | All tasks finished successfully | Yes |
 | `failed` | Stopped due to agent error or rejected approval | Yes |
 
-`approval_status` is a workflow-level field used by human approval gates in the hire_employee workflow.
+`approval_status` is a workflow-level field used by workflows containing human approval gates.
 
 | Approval Status | Meaning |
 |-----------------|---------|
@@ -315,7 +315,7 @@ Populated only when `status == "completed"`. Contains the output dict of the fin
 }
 ```
 
-**Status: `paused`** (hire_employee, at a human approval gate)
+**Status: `paused`** (workflow awaiting human approval)
 ```json
 {
   "workflow_id": "wf_abc123",
@@ -415,7 +415,7 @@ Populated only when `status == "completed"`. Contains the output dict of the fin
 
 ## 6. POST /workflows/{workflow_id}/resume
 
-Submits the human approval decision for a paused workflow. Only valid when `status == "paused"` and `awaiting_human_input == true`. Applicable only to `hire_employee` workflows in MVP.
+Submits the human approval decision for a paused workflow. Only valid when `status == "paused"` and `awaiting_human_input == true`.
 
 **Executor call:** `resume_workflow(workflow_id, approval_status, human_feedback,human_input_data) -> AgentState`
 
@@ -592,7 +592,7 @@ List items are intentionally trimmed — `current_task_id`, `error_message`, `re
 GET /workflows?status=paused
 ```
 
-Returns all `hire_employee` workflows awaiting an HR or Manager decision.
+Returns all workflows awaiting an HR or Manager decision.
 
 ---
 

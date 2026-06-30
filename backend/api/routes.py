@@ -173,6 +173,42 @@ def map_executor_error(exc: Exception):
         str(exc),
     )
 
+def get_approval_context(state) -> dict | None:
+
+    if not (
+        state.status == "paused"
+        and state.awaiting_human_input
+    ):
+        return None
+
+    workflow_tasks = WORKFLOWS.get(
+        state.objective_id,
+        []
+    )
+
+    current_gate = next(
+        (
+            task
+            for task in workflow_tasks
+            if task.task_id == state.current_task_id
+        ),
+        None
+    )
+
+    if current_gate is None:
+        return None
+
+    approval_context = {}
+
+    for dependency in current_gate.depends_on:
+        approval_context.update(
+            state.outputs.get(
+                dependency,
+                {}
+            )
+        )
+
+    return approval_context
 
 def build_workflow_response(state) -> WorkflowResponse:
 
@@ -226,12 +262,7 @@ def build_workflow_response(state) -> WorkflowResponse:
         awaiting_human_input=state.awaiting_human_input,
         approval_status=state.approval_status,
 
-        approval_context=(
-            state.outputs.get("t5")
-            if state.status == "paused"
-            and state.awaiting_human_input
-            else None
-        ),
+        approval_context=get_approval_context(state),
 
         human_feedback=state.human_feedback,
         error_message=state.error_message,

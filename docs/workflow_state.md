@@ -81,6 +81,7 @@ Current human gates:
 - hire_employee / t5 / hr_select_candidates
 - hire_employee / t7 / hr_offer_approval
 - hire_employee / t8 / manager_approval
+- sales_outreach / t6 / approve_outreach_campaign
 ---
 
 ## 2. AgentState Initialization
@@ -312,6 +313,7 @@ Current human gates:
 - hire_employee / t5 / hr_select_candidates
 - hire_employee / t7 / hr_offer_approval
 - hire_employee / t8 / manager_approval
+- sales_outreach / t6 / approve_outreach_campaign
 
 The executor must check `task.agent == "human"` before routing to the Agent Router.
 
@@ -701,7 +703,7 @@ def get_agent(task: Task) -> BaseAgent:
 | `"sales"` | `SalesAgent` | `sales_outreach`, `performance_report` |
 | `"research"` | `ResearchAgent` | `sales_outreach`, `market_research` |
 | `"reporting"` | `ReportingAgent` | all six workflows |
-| `"human"` | _(not routed — raise ValueError)_ | `hire_employee` |
+| `"human"` | _(not routed — raise ValueError)_ | `hire_employee`, `sales_outreach` |
 
 ### 10.3 Instantiation Strategy
 
@@ -902,7 +904,7 @@ t1 ─► t2 ─► t3 ─► t4 ─► t5
 ### sales_outreach (strictly sequential)
 
 ```
-t1 ─► t2 ─► t3 ─► t4 ─► t5 ─► t6
+t1 ─► t2 ─► t3 ─► t4 ─► t5 ─► t6 ─► t7 ─► t8
 ```
 
 | Task | Agent | Action |
@@ -912,7 +914,9 @@ t1 ─► t2 ─► t3 ─► t4 ─► t5 ─► t6
 | t3 | sales | create_outreach_strategy |
 | t4 | sales | generate_email_sequence |
 | t5 | sales | generate_call_scripts |
-| t6 | reporting | generate_campaign_summary |
+| t6 | human | approve_outreach_campaign |
+| t7 | sales | send_outreach |
+| t8 | reporting | generate_campaign_summary |
 
 ---
 
@@ -1009,7 +1013,9 @@ agents consume via `state.outputs["tN"]["key"]`.
 | sales_outreach | t3 | `outreach_strategy` | `OutreachStrategy` |
 | sales_outreach | t4 | `email_sequence` | `list[str]` |
 | sales_outreach | t5 | `call_scripts` | `list[str]` |
-| sales_outreach | t6 | `campaign_summary` | `str` |
+| sales_outreach | t6 |`approval_status`, `human_feedback`, `human_input_data` | `dict` |
+| sales_outreach | t7 | `send_approved_outreach` | `dict` |
+| sales_outreach | t8 | `campaign_summary` | `str` |
 | performance_report | t1 | `hr_metrics` | `HRMetrics` |
 | performance_report | t2 | `sales_metrics` | `SalesMetrics` |
 | performance_report | t3 | `aggregated_metrics` | `AggregatedMetrics` |

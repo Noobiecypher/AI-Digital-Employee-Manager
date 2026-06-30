@@ -75,6 +75,7 @@ def execute(task: Task, state: AgentState) -> dict
 | t3   | create_outreach_strategy | Create campaign strategy           | `{"outreach_strategy": OutreachStrategy}` |
 | t4   | generate_email_sequence  | Generate outreach emails           | `{"email_sequence": list[str]}`         |
 | t5   | generate_call_scripts    | Generate sales call scripts        | `{"call_scripts": list[str]}`           |
+| t7 | send_outreach | Send approved outreach emails | `{"send_statistics": dict}` |
 
 ### performance_report
 
@@ -115,7 +116,7 @@ def execute(task: Task, state: AgentState) -> dict
 |--------------------|------|---------------------------|-------------------------------------------------|---------------------------------------------|
 | hire_employee      | t9   | generate_hiring_summary   | Generate final hiring summary                   | `{"hiring_summary": str}`                   |
 | onboard_employee   | t5   | generate_summary          | Generate onboarding summary                     | `{"summary": str}`                          |
-| sales_outreach     | t6   | generate_campaign_summary | Generate outreach campaign summary              | `{"campaign_summary": str}`                 |
+| sales_outreach     | t8   | generate_campaign_summary | Generate outreach campaign summary              | `{"campaign_summary": str}`                 |
 | performance_report | t3   | aggregate_results         | Aggregate HR and sales metrics                  | `{"aggregated_metrics": AggregatedMetrics}` |
 | performance_report | t4   | generate_kpi_dashboard    | Build KPI dashboard from aggregated metrics     | `{"kpi_dashboard": KPIDashboard}`           |
 | performance_report | t5   | generate_executive_summary | Summarise KPI dashboard for leadership         | `{"executive_summary": str}`                |
@@ -129,7 +130,7 @@ def execute(task: Task, state: AgentState) -> dict
 
 The human approval gate is **not an agent**. It is a Workflow Executor checkpoint that pauses execution and awaits an external decision.
 
-Workflow: hire_employee
+Workflows : hire_employee, sales_outreach
 
 Human approval gates are Executor checkpoints that pause execution and await an external decision.
 
@@ -140,7 +141,7 @@ Supported gates:
 | t5 | hr_select_candidates | HR |
 | t7 | hr_offer_approval | HR |
 | t8 | manager_approval | MANAGER |
-
+| t6 | approve_outreach_campaign | MANAGER |
 
 ### Output stored
 
