@@ -117,7 +117,11 @@ from backend.api.business_schemas import (
     GoalCreateRequest,
     GoalUpdateRequest,
     GoalResponse,
+    GoalAchievementUpdateRequest,
+    GoalReviewRequest,
     GoalListResponse,
+    GoalUpdateHistoryResponse,
+    GoalUpdateHistoryListResponse,
     # Roles
     RoleCreateRequest,
     RoleUpdateRequest,
@@ -1109,6 +1113,162 @@ async def update_goal(
         )
 
     return GoalResponse(**goal)
+
+@business_router.post(
+    "/goals/{employee_name}/{review_period}/request-update",
+    response_model=GoalResponse,
+)
+async def request_goal_achievement_update(
+    employee_name: str,
+    review_period: str,
+    body: GoalAchievementUpdateRequest,
+    current_user: dict = Depends(
+        require_permission(
+            Permission.GOALS_UPDATE
+        )
+    ),
+):
+
+    if not can_access_goal(
+        current_user,
+        employee_name,
+    ):
+        raise error_response(
+            status.HTTP_403_FORBIDDEN,
+            "FORBIDDEN",
+            "You may only update your own goals.",
+        )
+
+
+
+    try:
+
+        goal = _repo.request_goal_achievement_update(
+            employee_name,
+            review_period,
+            body.goals_achieved,
+        )
+
+    except ValueError as exc:
+        raise error_response(
+            status.HTTP_404_NOT_FOUND,
+            "ENTITY_NOT_FOUND",
+            str(exc),
+        )
+
+    except RuntimeError as exc:
+        raise error_response(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            "INTERNAL_SERVER_ERROR",
+            str(exc),
+        )
+
+    return GoalResponse(**goal)
+
+@business_router.post(
+    "/goals/{employee_name}/{review_period}/review",
+    response_model=GoalResponse,
+)
+async def review_goal_update(
+    employee_name: str,
+    review_period: str,
+    body: GoalReviewRequest,
+    current_user: dict = Depends(
+        require_permission(
+            Permission.GOALS_UPDATE
+        )
+    ),
+):
+
+    if current_user["role"] not in [
+        "manager",
+        "admin",
+        "hr",
+    ]:
+        raise error_response(
+            status.HTTP_403_FORBIDDEN,
+            "FORBIDDEN",
+            "Only managers, HR and admins may review goal updates.",
+        )
+
+    try:
+
+        goal = _repo.review_goal_update(
+            employee_name=employee_name,
+            review_period=review_period,
+            approval_status=body.approval_status,
+            approver=current_user["full_name"],
+            manager_comments=body.manager_comments,
+        )
+
+    except ValueError as exc:
+        raise error_response(
+            status.HTTP_404_NOT_FOUND,
+            "ENTITY_NOT_FOUND",
+            str(exc),
+        )
+
+    except RuntimeError as exc:
+        raise error_response(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            "INTERNAL_SERVER_ERROR",
+            str(exc),
+        )
+
+    return GoalResponse(**goal)
+
+
+@business_router.get(
+    "/goals/{employee_name}/{review_period}/history",
+    response_model=
+    GoalUpdateHistoryListResponse,
+    summary="Get goal update history",
+)
+async def list_goal_update_history(
+    employee_name: str,
+    review_period: str,
+    current_user: dict = Depends(
+        require_permission(
+            Permission.GOALS_READ
+        )
+    ),
+):
+
+    if not can_access_goal(
+        current_user,
+        employee_name,
+    ):
+        raise error_response(
+            status.HTTP_403_FORBIDDEN,
+            "FORBIDDEN",
+            "You may only access your own goal history."
+        )
+
+    try:
+
+        history = (
+            _repo.list_goal_update_history(
+                employee_name,
+                review_period,
+            )
+        )
+
+    except RuntimeError as exc:
+        raise error_response(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            "INTERNAL_SERVER_ERROR",
+            str(exc),
+        )
+
+    return GoalUpdateHistoryListResponse(
+        total=len(history),
+        items=[
+            GoalUpdateHistoryResponse(
+                **item
+            )
+            for item in history
+        ],
+    )
 
 
 @business_router.delete(

@@ -78,6 +78,7 @@ from __future__ import annotations
 import logging
 import re
 import uuid
+from datetime import datetime, timezone
 from typing import Optional
 
 from pymongo.collection import Collection
@@ -89,7 +90,10 @@ from backend.database.mongo import (
     get_products_collection,
     get_roles_collection,
     get_goals_collection,
+    get_goal_update_history_collection,
 )
+
+from backend.api.business_schemas import GoalStatus
 
 logger = logging.getLogger(__name__)
 
@@ -146,6 +150,7 @@ class BusinessDataRepository:
         products_collection: Optional[Collection] = None,
         roles_collection: Optional[Collection] = None,
         goals_collection: Optional[Collection] = None,
+        goal_update_history_collection: Optional[Collection] = None,
     ) -> None:
         """
         Args:
@@ -165,6 +170,7 @@ class BusinessDataRepository:
         self._products: Optional[Collection] = products_collection
         self._roles: Optional[Collection] = roles_collection
         self._goals: Optional[Collection] = goals_collection
+        self._goal_update_history: Optional[Collection] = goal_update_history_collection
 
     # ------------------------------------------------------------------
     # Collection properties — lazy resolution via mongo.py getters.
@@ -205,6 +211,19 @@ class BusinessDataRepository:
         if self._goals is None:
             self._goals = get_goals_collection()
         return self._goals
+    
+    @property
+    def goal_update_history(self) -> Collection:
+        """
+        Resolve and cache the goal update history
+        collection on first access.
+        """
+        if self._goal_update_history is None:
+            self._goal_update_history = (
+                get_goal_update_history_collection()
+            )
+
+        return self._goal_update_history
     
     # ==================================================================
     # PRIVATE HELPERS
@@ -1283,7 +1302,189 @@ class BusinessDataRepository:
             employee_name,
             review_period,
         )
+    
 
+    def request_goal_achievement_update(
+        self,
+        employee_name: str,
+        review_period: str,
+        goals_achieved: list[str],
+    ) -> dict:
+
+        goal = self.get_goal(
+            employee_name,
+            review_period,
+        )
+
+        if (goal.get("status")== GoalStatus.PENDING_APPROVAL.value):
+            raise ValueError(
+                "A goal update request is already pending approval."
+            )
+
+        try:
+            self.goals.update_one(
+                self._goal_filter(
+                    employee_name,
+                    review_period,
+                ),
+                {
+                    "$set": {
+                        "pending_goal_update": {
+                            "goals_achieved": goals_achieved
+                        },
+                        "status": GoalStatus.PENDING_APPROVAL.value,
+                    }
+                },
+            )
+
+        except PyMongoError as exc:
+            raise RuntimeError(
+                f"Failed to request goal update: {exc}"
+            ) from exc
+
+        return self.get_goal(
+            employee_name,
+            review_period,
+        )
+    
+    def review_goal_update(
+        self,
+        employee_name: str,
+        review_period: str,
+        approval_status: str,
+        approver: str,
+        manager_comments: str | None = None,
+    ) -> dict:
+
+        goal = self.get_goal(
+            employee_name,
+            review_period,
+        )
+
+        pending = goal.get(
+            "pending_goal_update"
+        )
+
+        history_document = {
+        "employee_name": employee_name,
+        "review_period": review_period,
+
+        "requested_changes": pending,
+
+        "review_status": approval_status,
+
+        "reviewed_by": approver,
+
+        "reviewed_at": (
+            datetime.now(
+                timezone.utc
+            ).isoformat()
+        ),
+
+        "manager_comments": manager_comments,
+    }
+
+        if (
+            goal.get("status")
+            != GoalStatus.PENDING_APPROVAL.value
+        ):
+            raise ValueError(
+                "No pending goal update exists."
+            )
+
+        if approval_status == "approved":
+
+            existing_achievements = goal.get(
+                "goals_achieved",
+                []
+            )
+
+            new_achievements = pending.get(
+                "goals_achieved",
+                []
+            )
+
+            updated_achievements = list(
+                dict.fromkeys(
+                    existing_achievements + new_achievements
+                )
+            )
+
+            updates = {
+                "goals_achieved": updated_achievements,
+                "status": GoalStatus.ACTIVE.value,
+                "pending_goal_update": None,
+                "approved_by": approver,
+                "approved_at": (
+                    datetime.now(
+                        timezone.utc
+                    ).isoformat()
+                ),
+                "manager_comments": manager_comments,
+            }
+
+        else:
+
+            updates = {
+                "status": GoalStatus.ACTIVE.value,
+                "pending_goal_update": None,
+                "approved_by": approver,
+                "approved_at": (
+                    datetime.now(
+                        timezone.utc
+                    ).isoformat()
+                ),
+                "manager_comments": manager_comments,
+            }
+
+        try:
+            self.goal_update_history.insert_one(history_document)
+
+            self.goals.update_one(
+                self._goal_filter(
+                    employee_name,
+                    review_period,
+                ),
+                {
+                    "$set": updates
+                },
+            )
+
+        except PyMongoError as exc:
+            raise RuntimeError(
+                f"Failed to review goal update: {exc}"
+            ) from exc
+
+        return self.get_goal(
+            employee_name,
+            review_period,
+        )
+    
+    def list_goal_update_history(
+        self,
+        employee_name: str,
+        review_period: str,
+    ) -> list[dict]:
+
+        try:
+
+            return list(
+                self.goal_update_history.find(
+                    self._goal_filter(
+                        employee_name,
+                        review_period,
+                    ),
+                    {"_id": 0},
+                    sort=[
+                        ("reviewed_at", -1)
+                    ],
+                )
+            )
+
+        except PyMongoError as exc:
+            raise RuntimeError(
+                f"Failed to retrieve goal history: {exc}"
+            ) from exc
 
     def delete_goal(
         self,

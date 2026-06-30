@@ -177,6 +177,26 @@ def get_goals_collection() -> Collection:
     return get_client()[db_name]["goals"]
 
 
+def get_goal_update_history_collection() -> Collection:
+    """
+    Return the 'goal_update_history' collection from
+    the configured database.
+
+    Stores every goal update review event
+    (approved/rejected) for audit purposes.
+
+    Returns:
+        pymongo Collection object.
+    """
+    db_name: str = os.getenv(
+        "MONGO_DB_NAME",
+        _DEFAULT_DB_NAME,
+    )
+
+    return get_client()[db_name][
+        "goal_update_history"
+    ]
+
 def get_products_collection() -> Collection:
     """
     Return the 'products' collection from the configured database.

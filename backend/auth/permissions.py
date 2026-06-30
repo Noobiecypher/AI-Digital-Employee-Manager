@@ -192,6 +192,7 @@ ROLE_PERMISSIONS: dict[SystemRole, frozenset[Permission]] = {
     SystemRole.EMPLOYEE: frozenset({
         Permission.EMPLOYEES_READ,
         Permission.GOALS_READ,
+        Permission.GOALS_UPDATE,
     }),
 
     # Candidate: own application information read-only.
