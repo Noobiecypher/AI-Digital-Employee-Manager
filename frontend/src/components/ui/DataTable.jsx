@@ -1,0 +1,82 @@
+import LoadingSpinner from './LoadingSpinner'
+
+export default function DataTable({ columns, data, loading, emptyMessage = 'No data found', onRowClick }) {
+  return (
+    <div style={{
+      background: 'var(--color-bg-surface)',
+      borderRadius: 'var(--radius-lg)',
+      border: '1px solid var(--color-border)',
+      overflow: 'hidden',
+    }}>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
+          <thead>
+            <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
+              {columns.map(col => (
+                <th key={col.key} style={{
+                  padding: '11px 16px',
+                  textAlign: col.align || 'left',
+                  fontWeight: 600,
+                  fontSize: 11,
+                  color: 'var(--color-text-muted)',
+                  letterSpacing: '0.07em',
+                  textTransform: 'uppercase',
+                  whiteSpace: 'nowrap',
+                  width: col.width,
+                  background: 'var(--color-bg-surface-2)',
+                }}>
+                  {col.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr>
+                <td colSpan={columns.length} style={{ padding: 40, textAlign: 'center' }}>
+                  <div style={{ display: 'flex', justifyContent: 'center' }}>
+                    <LoadingSpinner />
+                  </div>
+                </td>
+              </tr>
+            ) : data.length === 0 ? (
+              <tr>
+                <td colSpan={columns.length} style={{
+                  padding: 40, textAlign: 'center',
+                  color: 'var(--color-text-muted)', fontSize: 13,
+                }}>
+                  {emptyMessage}
+                </td>
+              </tr>
+            ) : (
+              data.map((row, i) => (
+                <tr
+                  key={row._id || row.id || i}
+                  onClick={() => onRowClick?.(row)}
+                  style={{
+                    borderBottom: i < data.length - 1 ? '1px solid var(--color-border)' : 'none',
+                    cursor: onRowClick ? 'pointer' : 'default',
+                    transition: 'background 0.1s',
+                  }}
+                  onMouseEnter={e => { if (onRowClick) e.currentTarget.style.background = 'rgba(255,255,255,0.03)' }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
+                >
+                  {columns.map(col => (
+                    <td key={col.key} style={{
+                      padding: '13px 16px',
+                      color: 'var(--color-text-primary)',
+                      textAlign: col.align || 'left',
+                      verticalAlign: 'middle',
+                    }}>
+                      {col.render ? col.render(row[col.key], row) : (row[col.key] ?? '—')}
+                    </td>
+                  ))}
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}

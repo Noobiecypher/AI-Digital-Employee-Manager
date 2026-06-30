@@ -31,7 +31,7 @@ import logging
 import os
 
 from dotenv import load_dotenv
-
+import certifi
 from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymongo.errors import ConfigurationError, ConnectionFailure
@@ -86,9 +86,10 @@ def get_client() -> MongoClient:
 
     try:
         candidate: MongoClient = MongoClient(
-            uri,
-            serverSelectionTimeoutMS=_SERVER_SELECTION_TIMEOUT_MS,
-        )
+    uri,
+    serverSelectionTimeoutMS=_SERVER_SELECTION_TIMEOUT_MS,
+    tlsCAFile=certifi.where(),
+)
         # Verify the server is reachable — raises ConnectionFailure if not.
         candidate.admin.command("ping")
         _client = candidate
