@@ -31,6 +31,34 @@ from backend.models import (
     MarketData, CompetitorAnalysis, ResearchData, StructuredReport,
 )
 
+# Grounding tools (mock-data backed; simulate web/market research). Import
+# defensively so the agent still runs if the tools module is absent.
+try:
+    from backend.tools.search_tools import get_market_context, get_competitors
+except Exception:  # pragma: no cover
+    def get_market_context(query):
+        return {"market_overview": "", "trends": [], "data_points": []}
+
+    def get_competitors(query):
+        return []
+
+
+def _competitor_fallback(comps: list[dict], topic_competitors: list | None = None) -> dict:
+    """Turn grounded competitor records into a flat list[str] CompetitorAnalysis
+    fallback, preserving the source detail as readable text."""
+    if comps:
+        return {
+            "competitors": [c.get("name", "Competitor") for c in comps],
+            "strengths": [f"{c.get('name','')}: {s}" for c in comps for s in c.get("strengths", [])] or ["Established incumbents"],
+            "weaknesses": [f"{c.get('name','')}: {w}" for c in comps for w in c.get("weaknesses", [])] or ["Limited AI-native automation"],
+        }
+    tc = topic_competitors or []
+    return {
+        "competitors": tc or ["Incumbent suite vendors", "Point-solution tools"],
+        "strengths": [f"{c} has established market presence" for c in tc] or ["Established brand", "Broad feature coverage"],
+        "weaknesses": [f"{c} offers limited AI-native automation" for c in tc] or ["Limited AI-native automation", "Slower time-to-value"],
+    }
+
 
 # ---------------------------------------------------------------------------
 # LLM helpers — use the shared `llm`, but degrade safely if the model errors
@@ -121,13 +149,19 @@ class ResearchAgent(BaseAgent):
     # t1
     def _gather_market_data(self, task: Task, state: AgentState) -> dict:
         p = state.params  # SalesOutreachParams
+        ctx = get_market_context(f"{p.product_name} {p.target_segment}")
+        grounded = ctx.get("trends") or []
         prompt = (
-            "You are a B2B market analyst. List 3-5 current market trends for the "
-            "product/segment below. Return JSON: {\"market_trends\": [\"...\"]}.\n\n"
+            "You are a senior B2B market analyst. Using the reference context below, "
+            "give 3-5 specific, current market trends relevant to this product and "
+            "segment. Be concrete (buyer behaviour, budget, adoption), not generic. "
+            "Return JSON: {\"market_trends\": [\"...\"]} — each item a single string.\n\n"
             f"Product: {p.product_name}\nSegment: {p.target_segment}\n"
-            f"Known pain points: {list(p.pain_points)}\nReturn ONLY the JSON object."
+            f"Known pain points: {list(p.pain_points)}\n"
+            f"Market overview: {ctx.get('market_overview','')}\n"
+            f"Reference trends: {grounded}\nReturn ONLY the JSON object."
         )
-        fb = {"market_trends": [
+        fb = {"market_trends": grounded or [
             "Buyers are consolidating tools and demanding measurable ROI.",
             "Growing appetite for AI automation in operations.",
             "Preference for fast onboarding and low setup cost.",
@@ -144,18 +178,17 @@ class ResearchAgent(BaseAgent):
     def _analyze_competitors(self, task: Task, state: AgentState) -> dict:
         md = self.get_output(state, "t1")["market_data"]
         p = state.params
+        comps = get_competitors(f"{p.product_name} {p.target_segment}")
         prompt = (
-            "Infer the main competitors for this product/segment and analyse them. "
-            "Return JSON with keys 'competitors', 'strengths', 'weaknesses' "
-            "(each a list of strings).\n\n"
+            "You are a competitive-intelligence analyst. Using the reference "
+            "competitors below, return a competitor analysis as JSON with keys "
+            "'competitors', 'strengths', 'weaknesses' (each a list of strings). "
+            "Make strengths/weaknesses specific and attributable.\n\n"
             f"Product: {p.product_name}\nSegment: {p.target_segment}\n"
+            f"Reference competitors: {comps}\n"
             f"Market data: {md}\nReturn ONLY the JSON object."
         )
-        fallback = {
-            "competitors": ["Incumbent suite vendors", "Point-solution tools"],
-            "strengths": ["Established brand", "Broad feature coverage"],
-            "weaknesses": ["Limited AI-native automation", "Slower time-to-value"],
-        }
+        fallback = _competitor_fallback(comps)
         return {"competitor_analysis": _competitor_analysis(_ask_json(prompt, fallback), fallback)}
 
     # ===================== market_research =====================
@@ -174,18 +207,17 @@ class ResearchAgent(BaseAgent):
     def _perform_competitor_analysis(self, task: Task, state: AgentState) -> dict:
         rd = self.get_output(state, "t1")["research_data"]
         competitors = rd.get("competitors", [])
+        grounded = get_competitors(rd.get("topic", ""))
         prompt = (
-            "You are a market research analyst. Analyse the competitors for the topic "
-            "below. Return JSON with keys 'competitors', 'strengths', 'weaknesses' "
-            "(each a list of strings).\n\n"
-            f"Topic: {rd.get('topic')}\nCompetitors: {competitors}\n"
+            "You are a market research analyst. Using the reference context, analyse "
+            "the competitors for the topic below. Return JSON with keys 'competitors', "
+            "'strengths', 'weaknesses' (each a list of strings). Be specific and "
+            "attributable, not generic.\n\n"
+            f"Topic: {rd.get('topic')}\nManager-listed competitors: {competitors}\n"
+            f"Reference competitors: {grounded}\n"
             f"Focus areas: {rd.get('focus_areas')}\nReturn ONLY the JSON object."
         )
-        fallback = {
-            "competitors": competitors,
-            "strengths": [f"{c} has established market presence" for c in competitors] or ["Established incumbents"],
-            "weaknesses": [f"{c} offers limited AI-native automation" for c in competitors] or ["Limited automation"],
-        }
+        fallback = _competitor_fallback(grounded, topic_competitors=competitors)
         return {"competitor_analysis": _competitor_analysis(_ask_json(prompt, fallback), fallback)}
 
     # t3
@@ -224,11 +256,14 @@ class ResearchAgent(BaseAgent):
     def _generate_structured_report(self, task: Task, state: AgentState) -> dict:
         findings = self.get_output(state, "t3")["findings"]
         recommendations = self.get_output(state, "t4")["recommendations"]
+        topic = (self.get_output(state, "t1").get("research_data") or {}).get("topic", "")
+        overview = get_market_context(topic).get("market_overview", "")
         summary = _ask_text(
-            "Write a 2-3 sentence summary tying together the findings and recommendations below.\n\n"
-            f"Findings: {findings}\nRecommendations: {recommendations}",
-            fallback="The market favours differentiated, AI-native positioning; the recommendations "
-                     "focus on time-to-value and underserved segments.",
+            "Write a 2-3 sentence executive summary tying together the market context, "
+            "findings and recommendations below.\n\n"
+            f"Market context: {overview}\nFindings: {findings}\nRecommendations: {recommendations}",
+            fallback=overview or "The market favours differentiated, AI-native positioning; the "
+                     "recommendations focus on time-to-value and underserved segments.",
         )
         report = StructuredReport(
             findings=_to_str_list(findings),
