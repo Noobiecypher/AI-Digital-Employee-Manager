@@ -36,3 +36,6 @@ build/
 
 # Misc
 *.sqlite3
+
+# Runtime uploads
+uploads/

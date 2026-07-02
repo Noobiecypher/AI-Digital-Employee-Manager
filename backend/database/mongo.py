@@ -240,6 +240,44 @@ def get_reports_collection() -> Collection:
     return get_client()[db_name]["reports"]
 
 
+# ---------------------------------------------------------------------------
+# Document Upload & AI Document Ingestion collections
+# Used by document_repository.py and import_draft_repository.py.
+# Each function follows the identical pattern as get_workflows_collection().
+# ---------------------------------------------------------------------------
+
+def get_documents_collection() -> Collection:
+    """
+    Return the 'documents' collection from the configured database.
+
+    Stores uploaded document metadata, classification results,
+    processing results, and processing history for the Document
+    Upload & AI Document Ingestion subsystem. Documents are keyed on
+    '_id' == document_id, mirroring the workflows collection's use of
+    workflow_id as its primary key.
+
+    Returns:
+        pymongo Collection object for document documents.
+    """
+    db_name: str = os.getenv("MONGO_DB_NAME", _DEFAULT_DB_NAME)
+    return get_client()[db_name]["documents"]
+
+
+def get_import_drafts_collection() -> Collection:
+    """
+    Return the 'import_drafts' collection from the configured database.
+
+    Stores extracted structured data awaiting human review before
+    BusinessImportService is allowed to import it into a business
+    collection. Drafts are keyed on '_id' == draft_id.
+
+    Returns:
+        pymongo Collection object for import draft documents.
+    """
+    db_name: str = os.getenv("MONGO_DB_NAME", _DEFAULT_DB_NAME)
+    return get_client()[db_name]["import_drafts"]
+
+
 def close_client() -> None:
     """
     Close the MongoClient and release its connection pool.
