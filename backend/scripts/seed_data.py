@@ -36,6 +36,7 @@ import json
 import os
 import sys
 import uuid
+from backend.auth.security import hash_password
 
 # ---------------------------------------------------------------------------
 # Path setup — allows running as a script from any working directory
@@ -56,6 +57,7 @@ from backend.database.mongo import (
     get_products_collection,
     get_candidates_collection,
     get_reports_collection,
+    get_users_collection,
 )
 
 # ---------------------------------------------------------------------------
@@ -225,7 +227,67 @@ def seed_reports() -> None:
         f"[reports]    seeded {count} document(s)."
     )
 
+def seed_users() -> None:
+    """
+    Seed the users collection with default system users.
+    """
 
+    col = get_users_collection()
+
+    col.delete_many({})
+
+    users = [
+        {
+            "user_id": str(uuid.uuid4()),
+            "email": "admin@company.com",
+            "password_hash": hash_password("admin123"),
+            "full_name": "System Admin",
+            "role": "admin",
+            "is_active": True,
+        },
+        {
+            "user_id": str(uuid.uuid4()),
+            "email": "manager@company.com",
+            "password_hash": hash_password("manager123"),
+            "full_name": "Manager User",
+            "role": "manager",
+            "is_active": True,
+        },
+        {
+            "user_id": str(uuid.uuid4()),
+            "email": "hr@company.com",
+            "password_hash": hash_password("hr123456"),
+            "full_name": "HR User",
+            "role": "hr",
+            "is_active": True,
+        },
+        {
+            "user_id": str(uuid.uuid4()),
+            "email": "employee@company.com",
+            "password_hash": hash_password("employee123"),
+            "full_name": "Employee User",
+            "role": "employee",
+            "is_active": True,
+        },
+        {
+            "user_id": str(uuid.uuid4()),
+            "email": "candidate@company.com",
+            "password_hash": hash_password("candidate123"),
+            "full_name": "Candidate User",
+            "role": "candidate",
+            "is_active": True,
+        }
+    ]
+
+    col.create_index("email", unique=True)
+    col.create_index("role")
+    col.create_index("is_active")
+
+    col.insert_many(users)
+
+    print(
+        f"[users]      seeded {len(users)} document(s)."
+    )
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
@@ -240,6 +302,7 @@ def run_all() -> None:
     seed_products()
     seed_candidates()
     seed_reports()
+    seed_users()
 
     print("\nSeeding complete.")
 
@@ -250,7 +313,8 @@ def run_all() -> None:
         "- goals\n"
         "- products\n"
         "- candidates\n"
-        "- reports"
+        "- reports\n"
+        "- users"
     )
 
 

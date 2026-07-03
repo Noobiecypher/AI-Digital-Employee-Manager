@@ -20,7 +20,7 @@ Requirements:
        curl -fsSL https://ollama.com/install.sh | sh
 
     2. Pull the model:
-       ollama pull llama3.1:8b
+       ollama pull qwen2.5:1.5b
 
     3. Start Ollama server:
        ollama serve
@@ -36,7 +36,7 @@ from langchain_ollama import ChatOllama
 # Config — change only here when switching models
 # ---------------------------------------------------------------------------
 
-MODEL_NAME        = "qwen2.5:1.5b"   # or "qwen3:8b", "mistral", etc.
+MODEL_NAME        = "qwen2.5:1.5b"
 OLLAMA_BASE_URL   = "http://localhost:11434"
 TEMPERATURE       = 0.3             # lower = more deterministic, better for structured tasks
 MAX_TOKENS        = 2048

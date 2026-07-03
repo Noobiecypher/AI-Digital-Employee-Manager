@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { workflowsApi } from '../../api/workflows'
 import { useToast } from '../../components/layout/AppLayout'
@@ -13,158 +13,43 @@ const WF_DESCRIPTIONS = {
   performance_report: 'Generate a performance report from existing data',
 }
 
-// Mirrors the *Params models in backend/models.py.
-// type: 'text' | 'number' | 'list' | 'textarea'
-// 'list' fields are entered as comma-separated text and split into an array on submit.
-const WORKFLOW_PARAMS_CONFIG = {
-  hire_employee: [
-    { name: 'role',             label: 'Role',              type: 'text',    required: true },
-    { name: 'department',       label: 'Department',        type: 'text',    required: true },
-    { name: 'job_type',         label: 'Job Type',          type: 'text',    required: true, placeholder: 'full-time, contract, etc.' },
-    { name: 'experience_years', label: 'Experience (years)', type: 'number', required: false, default: 0 },
-    { name: 'skills_required',  label: 'Skills Required',   type: 'list',    required: false, placeholder: 'Python, FastAPI, MongoDB' },
-    { name: 'location',         label: 'Location',          type: 'text',    required: false },
-    { name: 'salary_range',     label: 'Salary Range',      type: 'text',    required: false },
-  ],
-  onboard_employee: [
-    { name: 'employee_name', label: 'Employee Name', type: 'text', required: true },
-    { name: 'role',          label: 'Role',          type: 'text', required: false },
-    { name: 'department',    label: 'Department',    type: 'text', required: false },
-    { name: 'joining_date',  label: 'Joining Date',  type: 'text', required: false, placeholder: 'YYYY-MM-DD' },
-    { name: 'manager_name',  label: 'Manager Name',  type: 'text', required: false },
-    { name: 'work_mode',     label: 'Work Mode',     type: 'text', required: false, placeholder: 'remote, hybrid, onsite' },
-  ],
-  sales_outreach: [
-    { name: 'target_segment',    label: 'Target Segment',     type: 'text', required: true },
-    { name: 'outreach_channels', label: 'Outreach Channels',  type: 'list', required: true, placeholder: 'email, linkedin, call' },
-    { name: 'campaign_goal',     label: 'Campaign Goal',      type: 'text', required: true },
-    { name: 'product_name',      label: 'Product Name',       type: 'text', required: false },
-    { name: 'pain_points',       label: 'Pain Points',        type: 'list', required: false, placeholder: 'slow onboarding, high cost' },
-  ],
-  performance_report: [
-    { name: 'report_period',       label: 'Report Period',        type: 'text', required: true, placeholder: 'Q2 2026' },
-    { name: 'departments',         label: 'Departments',          type: 'list', required: true, placeholder: 'Engineering, Sales' },
-    { name: 'metrics_to_include',  label: 'Metrics to Include',   type: 'list', required: true, placeholder: 'revenue, deals_won' },
-    { name: 'report_type',         label: 'Report Type',          type: 'text', required: true },
-  ],
-  performance_review: [
-    { name: 'employee_name',    label: 'Employee Name',    type: 'text',     required: true },
-    { name: 'review_period',    label: 'Review Period',    type: 'text',     required: true, placeholder: 'H1 2026' },
-    { name: 'manager_comments', label: 'Manager Comments', type: 'textarea', required: true },
-    { name: 'role',             label: 'Role',             type: 'text',     required: false },
-    { name: 'department',       label: 'Department',       type: 'text',     required: false },
-    { name: 'goals_set',        label: 'Goals Set',        type: 'list',     required: false, placeholder: 'Ship feature X, mentor junior dev' },
-    { name: 'goals_achieved',   label: 'Goals Achieved',   type: 'list',     required: false },
-    { name: 'rating_scale',     label: 'Rating Scale',     type: 'number',   required: false, default: 5 },
-  ],
-  market_research: [
-    { name: 'research_topic', label: 'Research Topic', type: 'text', required: true },
-    { name: 'competitors',    label: 'Competitors',    type: 'list', required: true, placeholder: 'Acme Inc, Globex Corp' },
-    { name: 'focus_areas',    label: 'Focus Areas',    type: 'list', required: true, placeholder: 'pricing, market share' },
-    { name: 'output_format',  label: 'Output Format',  type: 'text', required: true, placeholder: 'pdf, slide deck, summary' },
-  ],
-}
-
-const inputStyle = {
-  width: '100%', padding: '9px 12px', borderRadius: 8,
-  border: '1px solid var(--color-border)',
-  background: 'var(--color-bg-elevated)',
-  color: 'var(--color-text-primary)',
-  fontSize: 13, outline: 'none', boxSizing: 'border-box',
-}
-
-function FormField({ field, value, onChange, error }) {
-  const commonProps = {
-    value: value ?? '',
-    onChange: e => onChange(field.name, e.target.value),
-    placeholder: field.placeholder || '',
-    style: { ...inputStyle, border: `1px solid ${error ? '#EF4444' : 'var(--color-border)'}` },
-  }
-
-  return (
-    <div>
-      <label style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--color-text-secondary)', display: 'block', marginBottom: 5 }}>
-        {field.label}{field.required && <span style={{ color: '#EF4444' }}> *</span>}
-        {field.type === 'list' && (
-          <span style={{ fontWeight: 400, color: 'var(--color-text-muted)' }}> (comma-separated)</span>
-        )}
-      </label>
-      {field.type === 'textarea' ? (
-        <textarea rows={3} {...commonProps} />
-      ) : field.type === 'number' ? (
-        <input type="number" {...commonProps} />
-      ) : (
-        <input type="text" {...commonProps} />
-      )}
-      {error && <div style={{ fontSize: 11.5, color: '#EF4444', marginTop: 4 }}>{error}</div>}
-    </div>
-  )
-}
-
 export default function StartWorkflow() {
   const navigate  = useNavigate()
   const toast     = useToast()
   const [selected, setSelected] = useState('')
-  const [values, setValues]     = useState({})
-  const [errors, setErrors]     = useState({})
+  const [context, setContext]   = useState('')
   const [loading, setLoading]   = useState(false)
-
-  // Reset field values whenever the workflow type changes
-  useEffect(() => {
-    setValues({})
-    setErrors({})
-  }, [selected])
-
-  const fields = WORKFLOW_PARAMS_CONFIG[selected] || []
-
-  const handleFieldChange = (name, value) => {
-    setValues(v => ({ ...v, [name]: value }))
-    if (errors[name]) setErrors(e => ({ ...e, [name]: null }))
-  }
-
-  const buildParams = () => {
-    const params = {}
-    for (const field of fields) {
-      const raw = values[field.name]
-      if (field.type === 'list') {
-        const arr = (raw || '').split(',').map(s => s.trim()).filter(Boolean)
-        if (arr.length) params[field.name] = arr
-      } else if (field.type === 'number') {
-        if (raw !== undefined && raw !== '') params[field.name] = Number(raw)
-      } else {
-        if (raw) params[field.name] = raw
-      }
-    }
-    return params
-  }
-
-  const validate = () => {
-    const newErrors = {}
-    for (const field of fields) {
-      if (!field.required) continue
-      const raw = values[field.name]
-      const empty = field.type === 'list'
-        ? !(raw || '').split(',').map(s => s.trim()).filter(Boolean).length
-        : !raw
-      if (empty) newErrors[field.name] = 'Required'
-    }
-    setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
-  }
+  const [contextError, setContextError] = useState('')
 
   const handleSubmit = async () => {
     if (!selected) return toast.warning('Required', 'Select a workflow type')
-    if (!validate()) return toast.warning('Missing fields', 'Fill in all required fields')
-
+  
+    let parsedContext = {}
+    if (context.trim()) {
+      try {
+        parsedContext = JSON.parse(context)
+        setContextError('')
+      } catch {
+        setContextError('Invalid JSON — check your syntax')
+        return
+      }
+    }
+  
     setLoading(true)
     try {
-      const payload = { objective_id: selected, params: buildParams() }
+      const payload = { objective_id: selected, params: parsedContext }
       const res = await workflowsApi.start(payload)
       const id = res.workflow_id || res._id || res.id
       toast.success('Workflow started', `ID: ${id}`)
       navigate(id ? `/workflows/${id}` : '/workflows')
     } catch (err) {
-      toast.error('Failed to start', err.message)
+      // Extract message properly regardless of error shape
+      const msg = typeof err?.message === 'string'
+        ? err.message
+        : typeof err === 'string'
+        ? err
+        : JSON.stringify(err)
+      toast.error('Failed to start', msg)
     } finally {
       setLoading(false)
     }
@@ -219,29 +104,33 @@ export default function StartWorkflow() {
           </div>
         </div>
 
-        {/* Dynamic params form */}
-        {selected && (
-          <div>
-            <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--color-text-secondary)', letterSpacing: '0.02em', display: 'block', marginBottom: 12 }}>
-              Workflow Details
-            </label>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 14 }}>
-              {fields.map(field => (
-                <div key={field.name} style={field.type === 'textarea' ? { gridColumn: '1 / -1' } : undefined}>
-                  <FormField
-                    field={field}
-                    value={values[field.name]}
-                    onChange={handleFieldChange}
-                    error={errors[field.name]}
-                  />
-                </div>
-              ))}
-            </div>
-            <div style={{ fontSize: 11.5, color: 'var(--color-text-muted)', marginTop: 10 }}>
-              Fields marked * are required. Everything else is optional and will use backend defaults if left blank.
-            </div>
+        {/* Context JSON */}
+        <div>
+          <label style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--color-text-secondary)', letterSpacing: '0.02em', display: 'block', marginBottom: 6 }}>
+            Additional Context <span style={{ fontWeight: 400, color: 'var(--color-text-muted)' }}>(optional JSON)</span>
+          </label>
+          <textarea
+            value={context}
+            onChange={e => { setContext(e.target.value); setContextError('') }}
+            placeholder={'{\n  "role": "Backend Engineer",\n  "department": "Engineering"\n}'}
+            rows={5}
+            style={{
+              width: '100%', padding: '10px 12px', borderRadius: 8,
+              border: `1px solid ${contextError ? '#EF4444' : 'var(--color-border)'}`,
+              background: 'var(--color-bg-elevated)',
+              color: 'var(--color-text-primary)',
+              fontSize: 12.5, fontFamily: 'ui-monospace, monospace',
+              resize: 'vertical', outline: 'none', boxSizing: 'border-box',
+              lineHeight: 1.6,
+            }}
+            onFocus={e => e.target.style.borderColor = contextError ? '#EF4444' : '#6366F1'}
+            onBlur={e => e.target.style.borderColor = contextError ? '#EF4444' : 'var(--color-border)'}
+          />
+          {contextError && <div style={{ fontSize: 12, color: '#EF4444', marginTop: 4 }}>{contextError}</div>}
+          <div style={{ fontSize: 11.5, color: 'var(--color-text-muted)', marginTop: 6 }}>
+            Pass extra data to the workflow agent. Leave blank to use defaults.
           </div>
-        )}
+        </div>
 
         {/* Actions */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 8, borderTop: '1px solid var(--color-border)' }}>

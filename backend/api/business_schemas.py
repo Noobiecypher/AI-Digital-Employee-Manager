@@ -60,6 +60,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from enum import Enum
+
 # ==============================================================
 # EMPLOYEES
 # ==============================================================
@@ -608,6 +610,12 @@ class RoleUpdateRequest(BaseModel):
 # GOALS
 # ==============================================================
 
+
+class GoalStatus(str, Enum):
+    ACTIVE = "active"
+    PENDING_APPROVAL = "pending_approval"
+    REJECTED = "rejected"
+
 class GoalCreateRequest(BaseModel):
     """
     Payload for POST /api/goals.
@@ -700,6 +708,35 @@ class GoalUpdateRequest(BaseModel):
         ),
     )
 
+class GoalAchievementUpdateRequest(BaseModel):
+    """
+    Employee self-service request.
+
+    Employees may update only goals_achieved.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    goals_achieved: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Updated list of achieved goals submitted by employee."
+        ),
+    )
+
+class GoalReviewRequest(BaseModel):
+
+    model_config = ConfigDict(extra="forbid")
+
+    approval_status: str = Field(
+        ...,
+        pattern="^(approved|rejected)$",
+    )
+
+    manager_comments: str | None = Field(
+        default=None,
+        max_length=1000,
+    )
 
 class GoalResponse(BaseModel):
     """
@@ -725,6 +762,19 @@ class GoalResponse(BaseModel):
         description="Goals that have been completed.",
     )
 
+    status: GoalStatus = GoalStatus.ACTIVE
+
+    pending_goal_update: dict | None = Field(
+        default=None,
+        description="Pending employee-submitted changes awaiting approval.",
+    )
+
+    approved_by: str | None = None
+
+    approved_at: str | None = None
+
+    manager_comments: str | None = None
+
 
 class GoalListResponse(BaseModel):
     """Flat list of all goal documents across all employees and periods."""
@@ -733,3 +783,25 @@ class GoalListResponse(BaseModel):
         description="Total number of goal documents in the collection."
     )
     items: list[GoalResponse]
+
+class GoalUpdateHistoryResponse(BaseModel):
+
+    model_config = ConfigDict(
+        extra="ignore"
+    )
+
+    employee_name: str
+    review_period: str
+    requested_changes: dict | None = None
+
+    review_status: str
+    reviewed_by: str
+    reviewed_at: str
+
+    manager_comments: str | None = None
+
+
+class GoalUpdateHistoryListResponse(BaseModel):
+
+    total: int
+    items: list[GoalUpdateHistoryResponse]    

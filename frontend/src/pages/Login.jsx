@@ -3,23 +3,29 @@ import { useNavigate } from 'react-router-dom'
 import { authApi } from '../api/auth'
 import { useRole } from '../context/RoleContext'
 
-const MOCK_USERS = {
-  admin:     { username: 'admin',     password: 'admin123',    user: { id: '1', username: 'admin',     email: 'admin@company.com',     role: 'admin' } },
-  manager:   { username: 'manager',   password: 'manager123',  user: { id: '2', username: 'manager',   email: 'manager@company.com',   role: 'manager' } },
-  hr:        { username: 'hr',        password: 'hr123',       user: { id: '3', username: 'hr',        email: 'hr@company.com',        role: 'hr' } },
-  employee:  { username: 'employee',  password: 'employee123', user: { id: '4', username: 'employee',  email: 'employee@company.com',  role: 'employee' } },
-  candidate: { username: 'candidate', password: 'candidate123',user: { id: '5', username: 'candidate', email: 'candidate@company.com', role: 'candidate' } },
-}
+const WORKFLOW_STEPS = [
+  { label: 'Generate Job Description', agent: 'Recruitment Agent', time: '2s', color: '#6366F1' },
+  { label: 'Identify Required Skills',  agent: 'Recruitment Agent', time: '1s', color: '#6366F1' },
+  { label: 'Shortlist Candidates',      agent: 'Recruitment Agent', time: '4s', color: '#06B6D4' },
+  { label: 'Schedule Interviews',       agent: 'HR Agent',          time: '2s', color: '#06B6D4' },
+  { label: 'Generate Offer',            agent: 'HR Agent',          time: '3s', color: '#10B981' },
+  { label: 'Manager Approval',          agent: 'Human',             time: '—',  color: '#F59E0B' },
+]
 
-const TABS = ['Sign In', 'Sign Up', 'Password recovery']
+const STATS = [
+  { value: '6',    label: 'Workflow Types',    color: '#6366F1' },
+  { value: '5',    label: 'Role Permissions',  color: '#06B6D4' },
+  { value: '100%', label: 'Real-Time Sync',    color: '#10B981' },
+  { value: '3+',   label: 'AI Agents',         color: '#8B5CF6' },
+]
+
+const ROLES = ['admin', 'manager', 'hr', 'employee', 'candidate']
 
 export default function Login() {
   const navigate = useNavigate()
   const { login } = useRole()
-  const [tab, setTab] = useState('Sign In')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
-  const [agree, setAgree] = useState(true)
   const [error, setError]       = useState('')
   const [loading, setLoading]   = useState(false)
 
@@ -27,353 +33,324 @@ export default function Login() {
     e.preventDefault()
     setError('')
     if (!username || !password) return setError('Enter username and password')
-    if (!agree) return setError('Please accept the Terms of use')
-
     setLoading(true)
     try {
       const res = await authApi.login(username, password)
-      login(res.access_token, res.user)
+      const user = await authApi.me(res.access_token)
+      login(res.access_token, {
+        id: user.user_id,
+        username: user.full_name,
+        email: user.email,
+        role: user.role,
+      })
       navigate('/dashboard')
     } catch (err) {
-      const mock = Object.values(MOCK_USERS).find(
-        m => m.username === username && m.password === password
-      )
-      if (mock) {
-        login('mock_token_' + mock.user.role, mock.user)
-        navigate('/dashboard')
-      } else {
-        setError(err.message || 'Invalid credentials')
-      }
+      setError(err.message || 'Invalid credentials')
     } finally {
       setLoading(false)
     }
   }
 
-  const handleMockLogin = (role) => {
-    const mock = MOCK_USERS[role]
-    login('mock_token_' + role, mock.user)
-    navigate('/dashboard')
+  // DEV ONLY — calls POST /auth/mock-login which issues a real JWT by role.
+  // Remove the mock buttons and this function when switching to real credentials.
+  const handleMockLogin = async (role) => {
+    setError('')
+    setLoading(true)
+    try {
+      const res = await authApi.mockLogin(role)
+      const user = await authApi.me(res.access_token)
+      login(res.access_token, {
+        id: user.user_id,
+        username: user.full_name,
+        email: user.email,
+        role: user.role,
+      })
+      navigate('/dashboard')
+    } catch (err) {
+      setError(err.message || `Mock login failed for role: ${role}`)
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
     <div style={{
-      minHeight: '100vh', background: '#090E1A',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontFamily: 'Inter, system-ui, sans-serif', padding: '32px',
-      position: 'relative', overflow: 'hidden',
+      width: '100vw', height: '100vh',
+      background: '#090E1A',
+      display: 'flex',
+      fontFamily: 'Inter, system-ui, sans-serif',
+      overflow: 'hidden',
     }}>
       <style>{`
-        @keyframes floatY { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
-        @keyframes drift { 0% { transform: translate(0,0); } 50% { transform: translate(20px,-15px); } 100% { transform: translate(0,0); } }
-        @keyframes pulseDot { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-        @keyframes arrowUp { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+        @keyframes floatY  { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
+        @keyframes drift   { 0%{transform:translate(0,0)} 50%{transform:translate(20px,-15px)} 100%{transform:translate(0,0)} }
+        @keyframes pulse   { 0%,100%{opacity:1} 50%{opacity:0.3} }
+        @keyframes slideIn { from{opacity:0;transform:translateX(-8px)} to{opacity:1;transform:translateX(0)} }
       `}</style>
 
-      {/* Ambient background glow, matches existing palette */}
+      {/* ── LEFT PANEL ── */}
       <div style={{
-        position: 'absolute', top: '-10%', right: '-6%', width: 560, height: 560,
-        background: 'radial-gradient(circle, rgba(99,102,241,0.22), transparent 70%)',
-        borderRadius: '50%', filter: 'blur(70px)', animation: 'drift 16s ease-in-out infinite',
-      }} />
-      <div style={{
-        position: 'absolute', bottom: '-12%', left: '-8%', width: 460, height: 460,
-        background: 'radial-gradient(circle, rgba(6,182,212,0.16), transparent 70%)',
-        borderRadius: '50%', filter: 'blur(70px)', animation: 'drift 20s ease-in-out infinite reverse',
-      }} />
-      <div style={{
-        position: 'absolute', inset: 0, opacity: 0.35,
-        backgroundImage: 'linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px)',
-        backgroundSize: '48px 48px',
-        maskImage: 'radial-gradient(ellipse 80% 70% at 50% 40%, black, transparent)',
-      }} />
-
-      {/* Outer shell — mirrors the rounded "card on canvas" framing of the reference */}
-      <div style={{
-        position: 'relative', zIndex: 1,
-        width: '100%', maxWidth: 1180,
-        background: 'rgba(15,22,41,0.55)',
-        backdropFilter: 'blur(20px)',
-        border: '1px solid rgba(255,255,255,0.07)',
-        borderRadius: 28,
-        display: 'flex',
-        boxShadow: '0 30px 90px rgba(0,0,0,0.45)',
-        overflow: 'hidden',
+        width: 420, flexShrink: 0,
+        display: 'flex', flexDirection: 'column', justifyContent: 'center',
+        padding: '48px 52px',
+        borderRight: '1px solid rgba(255,255,255,0.06)',
+        background: '#090E1A',
+        position: 'relative', zIndex: 2,
       }}>
+        {/* Logo */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 44 }}>
+          <div style={{
+            width: 34, height: 34,
+            background: 'linear-gradient(135deg, #6366F1, #06B6D4)',
+            borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 13, fontWeight: 700, color: '#fff',
+            boxShadow: '0 0 16px rgba(99,102,241,0.4)',
+          }}>AI</div>
+          <span style={{ fontSize: 13.5, fontWeight: 600, color: '#F1F5F9' }}>AI Digital Employee</span>
+        </div>
 
-        {/* Left — sign-in card, raised above the shell like the reference */}
-        <div style={{
-          flex: '0 0 420px', margin: '32px', display: 'flex', flexDirection: 'column',
-          background: 'rgba(9,14,26,0.85)',
-          border: '1px solid rgba(255,255,255,0.08)',
-          borderRadius: 18,
-          boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
-          overflow: 'hidden',
-        }}>
-          {/* Tabs */}
-          <div style={{ display: 'flex', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
-            {TABS.map(t => (
-              <button
-                key={t}
-                onClick={() => setTab(t)}
-                style={{
-                  flex: 1, padding: '15px 10px', fontSize: 12.5, fontWeight: 600,
-                  background: 'transparent', border: 'none', cursor: 'pointer',
-                  color: tab === t ? '#F1F5F9' : '#475569',
-                  borderBottom: tab === t ? '2px solid #6366F1' : '2px solid transparent',
-                  transition: 'color 0.15s',
-                }}
+        <h1 style={{ fontSize: 26, fontWeight: 700, color: '#F1F5F9', marginBottom: 6, letterSpacing: '-0.02em' }}>
+          Welcome back
+        </h1>
+        <p style={{ fontSize: 13.5, color: '#64748B', marginBottom: 32 }}>
+          Sign in to access your dashboard
+        </p>
+
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 600, color: '#94A3B8', display: 'block', marginBottom: 6, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Username</label>
+            <input
+              value={username} onChange={e => setUsername(e.target.value)}
+              placeholder="Enter your username"
+              autoComplete="username"
+              style={iStyle}
+              onFocus={e => { e.target.style.borderColor = '#6366F1'; e.target.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.15)' }}
+              onBlur={e => { e.target.style.borderColor = 'rgba(255,255,255,0.08)'; e.target.style.boxShadow = 'none' }}
+            />
+          </div>
+          <div>
+            <label style={{ fontSize: 12, fontWeight: 600, color: '#94A3B8', display: 'block', marginBottom: 6, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Password</label>
+            <input
+              type="password" value={password} onChange={e => setPassword(e.target.value)}
+              placeholder="Enter your password"
+              autoComplete="current-password"
+              style={iStyle}
+              onFocus={e => { e.target.style.borderColor = '#6366F1'; e.target.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.15)' }}
+              onBlur={e => { e.target.style.borderColor = 'rgba(255,255,255,0.08)'; e.target.style.boxShadow = 'none' }}
+            />
+          </div>
+
+          {error && (
+            <div style={{ fontSize: 13, color: '#EF4444', padding: '9px 13px', background: 'rgba(239,68,68,0.08)', borderRadius: 9, border: '1px solid rgba(239,68,68,0.2)' }}>
+              {error}
+            </div>
+          )}
+
+          <button type="submit" disabled={loading} style={{
+            padding: '12px', borderRadius: 10, fontSize: 14, fontWeight: 600,
+            border: 'none', cursor: loading ? 'not-allowed' : 'pointer',
+            background: 'linear-gradient(135deg, #6366F1, #4F46E5)',
+            color: '#fff', opacity: loading ? 0.7 : 1,
+            boxShadow: '0 4px 20px rgba(99,102,241,0.35)',
+            marginTop: 4, transition: 'transform 0.15s',
+          }}
+            onMouseEnter={e => { if (!loading) e.currentTarget.style.transform = 'translateY(-1px)' }}
+            onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+          >
+            {loading ? 'Signing in...' : 'Sign In'}
+          </button>
+        </form>
+
+        {/* Mock login — DEV ONLY */}
+        <div style={{ marginTop: 28 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+            <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.07)' }} />
+            <span style={{ fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.09em', whiteSpace: 'nowrap' }}>Quick Test Login</span>
+            <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.07)' }} />
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, justifyContent: 'center' }}>
+            {ROLES.map(role => (
+              <button key={role} onClick={() => handleMockLogin(role)} disabled={loading} style={{
+                padding: '6px 14px', borderRadius: 20, fontSize: 11.5, fontWeight: 500,
+                border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.02)',
+                color: '#94A3B8', cursor: loading ? 'not-allowed' : 'pointer',
+                textTransform: 'capitalize', transition: 'all 0.15s',
+              }}
+                onMouseEnter={e => { if (!loading) { e.currentTarget.style.background = 'rgba(99,102,241,0.12)'; e.currentTarget.style.color = '#818CF8'; e.currentTarget.style.borderColor = 'rgba(99,102,241,0.3)' }}}
+                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.02)'; e.currentTarget.style.color = '#94A3B8'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)' }}
               >
-                {t}
+                {role}
               </button>
             ))}
           </div>
+        </div>
+      </div>
 
-          <div style={{ padding: '28px 28px 30px' }}>
-            {/* Wordmark */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 22 }}>
+      {/* ── RIGHT PANEL — takes all remaining space ── */}
+      <div style={{
+        flex: 1,
+        position: 'relative',
+        background: 'linear-gradient(155deg, #0D1326 0%, #0a1020 40%, #090E1A 100%)',
+        overflow: 'hidden',
+        display: 'flex', flexDirection: 'column',
+      }}>
+        {/* Glow orbs */}
+        <div style={{ position: 'absolute', top: '-5%',  right: '10%',  width: 600, height: 600, background: 'radial-gradient(circle, rgba(99,102,241,0.2), transparent 65%)', borderRadius: '50%', filter: 'blur(70px)', animation: 'drift 16s ease-in-out infinite' }} />
+        <div style={{ position: 'absolute', bottom: '-10%', left: '5%', width: 500, height: 500, background: 'radial-gradient(circle, rgba(6,182,212,0.16), transparent 65%)', borderRadius: '50%', filter: 'blur(70px)', animation: 'drift 20s ease-in-out infinite reverse' }} />
+        <div style={{ position: 'absolute', top: '30%',  right: '30%',  width: 350, height: 350, background: 'radial-gradient(circle, rgba(139,92,246,0.12), transparent 65%)', borderRadius: '50%', filter: 'blur(60px)', animation: 'drift 18s ease-in-out infinite' }} />
+
+        {/* Grid */}
+        <div style={{
+          position: 'absolute', inset: 0, opacity: 0.35,
+          backgroundImage: 'linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px)',
+          backgroundSize: '52px 52px',
+          maskImage: 'radial-gradient(ellipse 85% 65% at 40% 35%, black, transparent)',
+        }} />
+
+        {/* Main content — centered in remaining space */}
+        <div style={{
+          position: 'relative', zIndex: 1, flex: 1,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '48px 80px',
+        }}>
+          <div style={{ width: '100%', maxWidth: 900, display: 'flex', flexDirection: 'column', gap: 40 }}>
+
+            {/* Header */}
+            <div>
               <div style={{
-                width: 28, height: 28,
-                background: 'linear-gradient(135deg, #6366F1, #06B6D4)',
-                borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 12, fontWeight: 700, color: '#fff',
-                boxShadow: '0 0 14px rgba(99,102,241,0.4)',
-              }}>AI</div>
-              <span style={{ fontSize: 12.5, fontWeight: 600, color: '#94A3B8', letterSpacing: '0.01em' }}>
-                AI DIGITAL EMPLOYEE
-              </span>
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                padding: '5px 13px', borderRadius: 20,
+                background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.25)',
+                fontSize: 11.5, fontWeight: 600, color: '#818CF8',
+                marginBottom: 18, letterSpacing: '0.02em',
+              }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#818CF8', animation: 'pulse 1.8s infinite' }} />
+                Powered by AI Agents
+              </div>
+              <h2 style={{ fontSize: 40, fontWeight: 700, color: '#F1F5F9', lineHeight: 1.12, marginBottom: 14, letterSpacing: '-0.025em' }}>
+                One platform.<br />Every HR workflow.
+              </h2>
+              <p style={{ fontSize: 15, color: '#94A3B8', lineHeight: 1.65, maxWidth: 520 }}>
+                From hiring to onboarding to performance reviews — specialized AI agents handle the heavy lifting while you stay in control.
+              </p>
             </div>
 
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 14, marginBottom: 24,
-            }}>
-              <h1 style={{ fontSize: 21, fontWeight: 700, color: '#F1F5F9', letterSpacing: '-0.01em', whiteSpace: 'nowrap' }}>
-                {tab}
-              </h1>
-              <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.08)' }} />
-            </div>
+            {/* Two-column: workflow card + stats */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
 
-            {tab === 'Sign In' && (
-              <>
-                <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* Workflow card */}
+              <div style={{
+                background: 'rgba(15,22,41,0.75)',
+                backdropFilter: 'blur(20px)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                borderRadius: 18, padding: '22px 24px',
+                boxShadow: '0 24px 64px rgba(0,0,0,0.45)',
+                animation: 'floatY 6s ease-in-out infinite',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                   <div>
-                    <label style={labelStyle}>Login / Email</label>
-                    <div style={fieldWrapStyle}>
-                      <span style={iconStyle}>
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>
-                      </span>
-                      <input
-                        value={username}
-                        onChange={e => setUsername(e.target.value)}
-                        placeholder="you@company.com"
-                        style={inputStyle}
-                        onFocus={e => { e.target.parentElement.style.borderColor = '#6366F1'; e.target.parentElement.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.15)' }}
-                        onBlur={e => { e.target.parentElement.style.borderColor = 'rgba(255,255,255,0.08)'; e.target.parentElement.style.boxShadow = 'none' }}
-                      />
-                    </div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#F1F5F9', marginBottom: 2 }}>hire_employee</div>
+                    <div style={{ fontSize: 11, color: '#475569' }}>6 tasks · 12s total</div>
                   </div>
-
-                  <div>
-                    <label style={labelStyle}>Password</label>
-                    <div style={fieldWrapStyle}>
-                      <span style={iconStyle}>
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
-                      </span>
-                      <input
-                        type="password"
-                        value={password}
-                        onChange={e => setPassword(e.target.value)}
-                        placeholder="••••••••"
-                        style={inputStyle}
-                        onFocus={e => { e.target.parentElement.style.borderColor = '#6366F1'; e.target.parentElement.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.15)' }}
-                        onBlur={e => { e.target.parentElement.style.borderColor = 'rgba(255,255,255,0.08)'; e.target.parentElement.style.boxShadow = 'none' }}
-                      />
-                    </div>
-                  </div>
-
-                  {error && (
-                    <div style={{
-                      fontSize: 12.5, color: '#EF4444', padding: '9px 13px',
-                      background: 'rgba(239,68,68,0.08)', borderRadius: 9,
-                      border: '1px solid rgba(239,68,68,0.2)',
-                    }}>{error}</div>
-                  )}
-
-                  <label style={{
-                    display: 'flex', alignItems: 'flex-start', gap: 9, cursor: 'pointer',
-                    fontSize: 12, color: '#94A3B8', lineHeight: 1.5, marginTop: 2,
+                  <span style={{
+                    display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 500, color: '#10B981',
+                    padding: '3px 9px', borderRadius: 20, background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.25)',
                   }}>
-                    <input
-                      type="checkbox"
-                      checked={agree}
-                      onChange={e => setAgree(e.target.checked)}
-                      style={{ marginTop: 2, accentColor: '#6366F1', width: 14, height: 14, flexShrink: 0 }}
-                    />
-                    I agree to the AI Digital Employee{' '}
-                    <span style={{ color: '#818CF8', textDecoration: 'underline' }}>Terms of use</span>
-                  </label>
-
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    style={{
-                      padding: '12.5px', borderRadius: 11, fontSize: 13.5, fontWeight: 600,
-                      border: 'none', cursor: loading ? 'not-allowed' : 'pointer',
-                      background: 'linear-gradient(135deg, #6366F1, #4F46E5)',
-                      color: '#fff', opacity: loading ? 0.7 : 1,
-                      boxShadow: '0 4px 22px rgba(99,102,241,0.35)',
-                      marginTop: 4, transition: 'transform 0.15s',
-                    }}
-                    onMouseEnter={e => { if (!loading) e.currentTarget.style.transform = 'translateY(-1px)' }}
-                    onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
-                  >
-                    {loading ? 'Signing in...' : 'Sign In'}
-                  </button>
-                </form>
-
-                <div style={{ marginTop: 26 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-                    <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.08)' }} />
-                    <span style={{ fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.08em', whiteSpace: 'nowrap' }}>
-                      Quick Test Login
-                    </span>
-                    <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.08)' }} />
-                  </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, justifyContent: 'center' }}>
-                    {Object.keys(MOCK_USERS).map(role => (
-                      <button
-                        key={role}
-                        onClick={() => handleMockLogin(role)}
-                        style={{
-                          padding: '6px 14px', borderRadius: 20, fontSize: 11.5, fontWeight: 500,
-                          border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.02)',
-                          color: '#94A3B8', cursor: 'pointer', textTransform: 'capitalize',
-                          transition: 'all 0.15s',
-                        }}
-                        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(99,102,241,0.12)'; e.currentTarget.style.color = '#818CF8'; e.currentTarget.style.borderColor = 'rgba(99,102,241,0.3)' }}
-                        onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.02)'; e.currentTarget.style.color = '#94A3B8'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)' }}
-                      >
-                        {role}
-                      </button>
-                    ))}
-                  </div>
+                    <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'currentColor' }} />
+                    Completed
+                  </span>
                 </div>
-              </>
-            )}
 
-            {tab === 'Sign Up' && (
-              <div style={{ fontSize: 13, color: '#64748B', lineHeight: 1.6, padding: '20px 0' }}>
-                Account creation is managed by your workspace admin. Reach out to HR to get provisioned.
+                {WORKFLOW_STEPS.map((step, i, arr) => (
+                  <div key={step.label} style={{ display: 'flex', gap: 12 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
+                      <div style={{
+                        width: 20, height: 20, borderRadius: '50%', flexShrink: 0,
+                        background: `${step.color}20`, border: `1.5px solid ${step.color}`,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 9, color: step.color, fontWeight: 700,
+                      }}>✓</div>
+                      {i < arr.length - 1 && <div style={{ width: 1.5, flex: 1, background: `${step.color}30`, minHeight: 14 }} />}
+                    </div>
+                    <div style={{ flex: 1, paddingBottom: i < arr.length - 1 ? 12 : 0 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: 12.5, color: '#CBD5E1' }}>{step.label}</span>
+                        <span style={{ fontSize: 10.5, color: '#475569', marginLeft: 8, flexShrink: 0 }}>{step.time}</span>
+                      </div>
+                      <div style={{ fontSize: 11, color: '#475569', marginTop: 1 }}>{step.agent}</div>
+                    </div>
+                  </div>
+                ))}
               </div>
-            )}
 
-            {tab === 'Password recovery' && (
+              {/* Right column: stats + feature rows */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                <div>
-                  <label style={labelStyle}>Login / Email</label>
-                  <div style={fieldWrapStyle}>
-                    <span style={iconStyle}>
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>
-                    </span>
-                    <input placeholder="you@company.com" style={inputStyle} />
-                  </div>
+                {/* Stat grid */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  {STATS.map(stat => (
+                    <div key={stat.label} style={{
+                      background: 'rgba(15,22,41,0.6)',
+                      border: '1px solid rgba(255,255,255,0.07)',
+                      borderRadius: 14, padding: '16px 18px',
+                      position: 'relative', overflow: 'hidden',
+                    }}>
+                      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, ${stat.color}, transparent)` }} />
+                      <div style={{ fontSize: 22, fontWeight: 700, color: '#F1F5F9', marginBottom: 3, letterSpacing: '-0.02em' }}>{stat.value}</div>
+                      <div style={{ fontSize: 11, color: '#64748B' }}>{stat.label}</div>
+                    </div>
+                  ))}
                 </div>
-                <button style={{
-                  padding: '12.5px', borderRadius: 11, fontSize: 13.5, fontWeight: 600,
-                  border: 'none', cursor: 'pointer',
-                  background: 'linear-gradient(135deg, #6366F1, #4F46E5)',
-                  color: '#fff', boxShadow: '0 4px 22px rgba(99,102,241,0.35)',
-                }}>
-                  Send recovery link
-                </button>
+
+                {/* Feature list */}
+                {[
+                  { title: 'Automated Recruitment', desc: 'AI agents handle shortlisting and offers end-to-end.', icon: '👥', color: '#6366F1' },
+                  { title: 'Real-Time Workflows',   desc: 'Track every agent task live from posting to approval.', icon: '⚡', color: '#06B6D4' },
+                  { title: 'Role-Based Access',     desc: '5 roles — Admin, Manager, HR, Employee, Candidate.', icon: '🔐', color: '#10B981' },
+                ].map(f => (
+                  <div key={f.title} style={{
+                    display: 'flex', gap: 14, alignItems: 'flex-start',
+                    background: 'rgba(15,22,41,0.4)', border: '1px solid rgba(255,255,255,0.05)',
+                    borderRadius: 12, padding: '14px 16px',
+                  }}>
+                    <div style={{
+                      width: 34, height: 34, borderRadius: 9, flexShrink: 0,
+                      background: `${f.color}18`, border: `1px solid ${f.color}30`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16,
+                    }}>{f.icon}</div>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: '#F1F5F9', marginBottom: 3 }}>{f.title}</div>
+                      <div style={{ fontSize: 12, color: '#64748B', lineHeight: 1.5 }}>{f.desc}</div>
+                    </div>
+                  </div>
+                ))}
               </div>
-            )}
+            </div>
           </div>
         </div>
 
-        {/* Right — welcome showcase, mirrors the reference's headline + uplift visual */}
+        {/* Bottom bar */}
         <div style={{
-          flex: 1, position: 'relative',
-          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-          padding: '40px 48px', minHeight: 560,
+          position: 'relative', zIndex: 1,
+          borderTop: '1px solid rgba(255,255,255,0.05)',
+          padding: '16px 80px',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          background: 'rgba(9,14,26,0.5)',
         }}>
-          <div style={{
-            position: 'absolute', top: '20%', right: '10%', width: 260, height: 260,
-            background: 'radial-gradient(circle, rgba(139,92,246,0.16), transparent 70%)',
-            borderRadius: '50%', filter: 'blur(50px)', animation: 'drift 14s ease-in-out infinite',
-          }} />
-
-          <div style={{
-            width: 56, height: 56, borderRadius: 14,
-            background: 'linear-gradient(135deg, #6366F1, #06B6D4)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 22, fontWeight: 700, color: '#fff',
-            boxShadow: '0 0 30px rgba(99,102,241,0.45)',
-            marginBottom: 22, animation: 'floatY 6s ease-in-out infinite',
-          }}>AI</div>
-
-          <h2 style={{
-            fontSize: 30, fontWeight: 700, color: '#F1F5F9', textAlign: 'center',
-            lineHeight: 1.25, letterSpacing: '-0.02em', marginBottom: 36, maxWidth: 460,
-          }}>
-            Welcome to the AI Digital<br />Employee platform
-          </h2>
-
-          {/* Uplift visual — stands in for the reference's chart + arrow scene, in the existing palette */}
-          <div style={{ position: 'relative', width: '100%', maxWidth: 440 }}>
-            <svg viewBox="0 0 440 200" width="100%" style={{ display: 'block', animation: 'arrowUp 5s ease-in-out infinite' }}>
-              <defs>
-                <linearGradient id="lineGrad" x1="0" y1="0" x2="1" y2="0">
-                  <stop offset="0%" stopColor="#06B6D4" />
-                  <stop offset="100%" stopColor="#6366F1" />
-                </linearGradient>
-              </defs>
-              <polyline
-                points="10,150 70,120 130,160 190,90 250,110 310,55 370,70 430,20"
-                fill="none" stroke="url(#lineGrad)" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"
-              />
-              {[ [10,150], [130,160], [250,110], [370,70], [430,20] ].map(([x,y], i) => (
-                <circle key={i} cx={x} cy={y} r="5" fill="#0F1629" stroke="#818CF8" strokeWidth="2.5" />
-              ))}
-            </svg>
-          </div>
-
-          <div style={{ display: 'flex', gap: 28, marginTop: 36 }}>
-            {[
-              { value: '5',    label: 'Workflow Types' },
-              { value: '5',    label: 'Role Permissions' },
-              { value: '100%', label: 'Real-Time Sync' },
-            ].map((stat, i, arr) => (
-              <div key={stat.label} style={{
-                textAlign: 'center',
-                paddingRight: i < arr.length - 1 ? 28 : 0,
-                borderRight: i < arr.length - 1 ? '1px solid rgba(255,255,255,0.08)' : 'none',
-              }}>
-                <div style={{ fontSize: 22, fontWeight: 700, color: '#F1F5F9', letterSpacing: '-0.02em' }}>{stat.value}</div>
-                <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>{stat.label}</div>
-              </div>
+          <span style={{ fontSize: 12, color: '#334155' }}>© 2025 AI Digital Employee Platform · BITS Pilani</span>
+          <div style={{ display: 'flex', gap: 20 }}>
+            {['Admin', 'Manager', 'HR', 'Employee', 'Candidate'].map(role => (
+              <span key={role} style={{ fontSize: 11.5, color: '#334155', textTransform: 'capitalize' }}>{role}</span>
             ))}
           </div>
+          <span style={{ fontSize: 12, color: '#334155' }}>v1.0.0</span>
         </div>
       </div>
     </div>
   )
 }
 
-const labelStyle = {
-  fontSize: 11.5, fontWeight: 600, color: '#94A3B8', display: 'block', marginBottom: 7,
-  textTransform: 'uppercase', letterSpacing: '0.03em',
-}
-
-const fieldWrapStyle = {
-  display: 'flex', alignItems: 'center', gap: 9,
-  border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10,
-  background: 'rgba(255,255,255,0.025)', padding: '0 13px',
-  transition: 'all 0.15s',
-}
-
-const iconStyle = { color: '#64748B', display: 'flex', flexShrink: 0 }
-
-const inputStyle = {
-  flex: 1, padding: '12px 0', fontSize: 13.5, border: 'none', outline: 'none',
-  background: 'transparent', color: '#F1F5F9', boxSizing: 'border-box',
+const iStyle = {
+  width: '100%', padding: '11px 13px', borderRadius: 9, fontSize: 13.5,
+  border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.025)',
+  color: '#F1F5F9', outline: 'none', boxSizing: 'border-box', transition: 'all 0.15s',
 }

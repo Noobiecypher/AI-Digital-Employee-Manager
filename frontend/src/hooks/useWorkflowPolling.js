@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { workflowsApi } from '../api/workflows'
 
-const TERMINAL_STATUSES = ['completed', 'failed']
+const TERMINAL_STATUSES = ['completed', 'failed', 'paused']
 const POLL_INTERVAL_MS  = 4000
 
 export function useWorkflowPolling(workflowId, { enabled = true } = {}) {

@@ -645,6 +645,7 @@ def resume_workflow(
     workflow_id: str,
     approval_status: str,
     human_feedback: str | None = None,
+    human_input_data: dict | None = None,
 ) -> AgentState:
     """
     Resume a paused workflow after the human approval gate is resolved.
@@ -744,6 +745,10 @@ def resume_workflow(
     state.approval_status = approval_status
     state.human_feedback = human_feedback
 
+    state.human_input_data = (
+        human_input_data or {}
+    )
+
     # Store gate output for consistency with the task-output pattern.
     # state.approval_status is the authoritative field (ref: §6.5).
     if gate_task_id in state.outputs:
@@ -754,7 +759,11 @@ def resume_workflow(
         )
 
     state.outputs[gate_task_id] = {
-        "approval_status": approval_status
+        "approval_status": approval_status,
+        "human_feedback": human_feedback,
+        "human_input_data": (
+            human_input_data or {}
+        ),
     }
 
     # ── 7a. Approved ──────────────────────────────────────────────────

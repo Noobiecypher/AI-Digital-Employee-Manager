@@ -37,6 +37,9 @@ class ResumeWorkflowRequest(BaseModel):
         default=None,
         max_length=2000,
     )
+    human_input_data: dict[str, Any] = Field(
+        default_factory=dict
+    )
 
 
 class StartWorkflowResponse(BaseModel):

@@ -86,6 +86,16 @@ import logging
 
 from fastapi import APIRouter, HTTPException, Response, status
 
+from fastapi import Depends
+
+from backend.auth.dependencies import require_permission
+from backend.auth.permissions import Permission
+from backend.auth.ownership import (
+    can_access_employee,
+    can_access_candidate,
+    can_access_goal,
+)
+
 from backend.database.business_data_repository import BusinessDataRepository
 from backend.api.business_schemas import (
     # Employees
@@ -107,7 +117,11 @@ from backend.api.business_schemas import (
     GoalCreateRequest,
     GoalUpdateRequest,
     GoalResponse,
+    GoalAchievementUpdateRequest,
+    GoalReviewRequest,
     GoalListResponse,
+    GoalUpdateHistoryResponse,
+    GoalUpdateHistoryListResponse,
     # Roles
     RoleCreateRequest,
     RoleUpdateRequest,
@@ -197,7 +211,14 @@ def _clean_updates(data: dict) -> dict:
         "The `total` field reflects the full collection size."
     ),
 )
-async def list_employees() -> EmployeeListResponse:
+async def list_employees(
+    current_user: dict = Depends(
+        require_permission(
+            Permission.EMPLOYEES_READ
+        )
+    ),
+) -> EmployeeListResponse:
+    
     """Retrieve all employees from the employees collection."""
     try:
         employees = _repo.list_employees()
@@ -208,6 +229,18 @@ async def list_employees() -> EmployeeListResponse:
             "INTERNAL_SERVER_ERROR",
             str(exc),
         )
+    
+    if current_user["role"] == "employee":
+
+        employees = [
+            e
+            for e in employees
+            if (
+                e["employee_id"]
+                ==
+                current_user.get("employee_id")
+            )
+        ]
 
     return EmployeeListResponse(
         total=len(employees),
@@ -224,8 +257,27 @@ async def list_employees() -> EmployeeListResponse:
         "(e.g. 'EMP001'). employee_id matching is case-sensitive."
     ),
 )
-async def get_employee(employee_id: str) -> EmployeeResponse:
+async def get_employee(
+    employee_id: str,
+    current_user: dict = Depends(
+        require_permission(
+            Permission.EMPLOYEES_READ
+        )
+    ),
+) -> EmployeeResponse:
+    
     """Retrieve a single employee by business key."""
+
+    if not can_access_employee(
+        current_user,
+        employee_id,
+    ):
+        raise error_response(
+            status.HTTP_403_FORBIDDEN,
+            "FORBIDDEN",
+            "You may only access your own employee profile."
+        )
+    
     try:
         employee = _repo.get_employee(employee_id)
     except ValueError as exc:
@@ -257,7 +309,15 @@ async def get_employee(employee_id: str) -> EmployeeResponse:
         "taken."
     ),
 )
-async def create_employee(body: EmployeeCreateRequest) -> EmployeeResponse:
+async def create_employee(
+    body: EmployeeCreateRequest,
+    _: dict = Depends(
+        require_permission(
+            Permission.EMPLOYEES_CREATE
+        )
+    ),
+) -> EmployeeResponse:
+    
     """Create a new employee. Returns 409 if employee_id already exists."""
     try:
         employee = _repo.create_employee(body.model_dump())
@@ -299,7 +359,13 @@ async def create_employee(body: EmployeeCreateRequest) -> EmployeeResponse:
 async def update_employee(
     employee_id: str,
     body: EmployeeUpdateRequest,
+    _: dict = Depends(
+        require_permission(
+            Permission.EMPLOYEES_UPDATE
+        )
+    ),
 ) -> EmployeeResponse:
+    
     """Partially update an existing employee. Returns 404 if not found."""
     updates = _clean_updates(body.model_dump())
 
@@ -336,7 +402,15 @@ async def update_employee(
         "Returns 204 No Content on success, 404 if the employee does not exist."
     ),
 )
-async def delete_employee(employee_id: str) -> Response:
+async def delete_employee(
+    employee_id: str,
+    _: dict = Depends(
+        require_permission(
+            Permission.EMPLOYEES_DELETE
+        )
+    ),
+) -> Response:
+    
     """Delete an employee by business key. Returns 204 on success."""
     try:
         _repo.delete_employee(employee_id)
@@ -377,7 +451,14 @@ async def delete_employee(employee_id: str) -> Response:
         "until the future resume-upload endpoint populates them."
     ),
 )
-async def list_candidates() -> CandidateListResponse:
+async def list_candidates(
+    current_user: dict = Depends(
+        require_permission(
+            Permission.CANDIDATES_READ
+        )
+),
+) -> CandidateListResponse:
+    
     """Retrieve all candidates from the candidates collection."""
     try:
         candidates = _repo.list_candidates()
@@ -388,6 +469,18 @@ async def list_candidates() -> CandidateListResponse:
             "INTERNAL_SERVER_ERROR",
             str(exc),
         )
+    
+    if current_user["role"] == "candidate":
+
+        candidates = [
+            c
+            for c in candidates
+            if (
+                c["candidate_id"]
+                ==
+                current_user.get("candidate_id")
+            )
+        ]
 
     return CandidateListResponse(
         total=len(candidates),
@@ -404,8 +497,27 @@ async def list_candidates() -> CandidateListResponse:
         "candidate_id. The response includes resume extensibility fields."
     ),
 )
-async def get_candidate(candidate_id: str) -> CandidateResponse:
+async def get_candidate(
+    candidate_id: str,
+    current_user: dict = Depends(
+        require_permission(
+            Permission.CANDIDATES_READ
+        )
+    ),                    
+) -> CandidateResponse:
+    
     """Retrieve a single candidate by UUID candidate_id."""
+
+    if not can_access_candidate(
+        current_user,
+        candidate_id,
+    ):
+        raise error_response(
+            status.HTTP_403_FORBIDDEN,
+            "FORBIDDEN",
+            "You may only access your own candidate profile."
+        )
+
     try:
         candidate = _repo.get_candidate(candidate_id)
     except ValueError as exc:
@@ -442,7 +554,15 @@ async def get_candidate(candidate_id: str) -> CandidateResponse:
         "dedicated resume-upload endpoint."
     ),
 )
-async def create_candidate(body: CandidateCreateRequest) -> CandidateResponse:
+async def create_candidate(
+    body: CandidateCreateRequest,
+    _: dict = Depends(
+        require_permission(
+            Permission.CANDIDATES_CREATE
+        )
+    ),
+) -> CandidateResponse:
+    
     """
     Create a new candidate. candidate_id is server-generated (UUID4).
 
@@ -478,6 +598,11 @@ async def create_candidate(body: CandidateCreateRequest) -> CandidateResponse:
 async def update_candidate(
     candidate_id: str,
     body: CandidateUpdateRequest,
+    _: dict = Depends(
+        require_permission(
+            Permission.CANDIDATES_UPDATE
+        )
+    ),
 ) -> CandidateResponse:
     """Partially update an existing candidate. Returns 404 if not found."""
     updates = _clean_updates(body.model_dump())
@@ -515,7 +640,14 @@ async def update_candidate(
         "Returns 204 No Content on success."
     ),
 )
-async def delete_candidate(candidate_id: str) -> Response:
+async def delete_candidate(
+    candidate_id: str,
+    _: dict = Depends(
+        require_permission(
+            Permission.CANDIDATES_DELETE
+        )
+    ),
+) -> Response:
     """Delete a candidate by UUID. Returns 204 on success."""
     try:
         _repo.delete_candidate(candidate_id)
@@ -556,7 +688,13 @@ async def delete_candidate(candidate_id: str) -> Response:
         "the next workflow run."
     ),
 )
-async def list_products() -> ProductListResponse:
+async def list_products(
+    _: dict = Depends(
+        require_permission(
+            Permission.PRODUCTS_READ
+        )
+),
+) -> ProductListResponse:
     """Retrieve all products from the products collection."""
     try:
         products = _repo.list_products()
@@ -584,7 +722,14 @@ async def list_products() -> ProductListResponse:
         "data_loader.get_product(). URL-encode spaces as %20."
     ),
 )
-async def get_product(product_name: str) -> ProductResponse:
+async def get_product(
+    product_name: str,
+    _: dict = Depends(
+        require_permission(
+            Permission.PRODUCTS_READ
+        )
+    ),
+) -> ProductResponse:
     """Retrieve a single product by product_name (case-insensitive)."""
     try:
         product = _repo.get_product(product_name)
@@ -621,7 +766,14 @@ async def get_product(product_name: str) -> ProductResponse:
         "name already exists."
     ),
 )
-async def create_product(body: ProductCreateRequest) -> ProductResponse:
+async def create_product(
+    body: ProductCreateRequest,
+    _: dict = Depends(
+        require_permission(
+            Permission.PRODUCTS_CREATE
+        )
+    ),
+) -> ProductResponse:
     """Create a new product. Returns 409 if product_name already exists."""
     try:
         product = _repo.create_product(body.model_dump())
@@ -663,6 +815,11 @@ async def create_product(body: ProductCreateRequest) -> ProductResponse:
 async def update_product(
     product_name: str,
     body: ProductUpdateRequest,
+    _: dict = Depends(
+        require_permission(
+            Permission.PRODUCTS_UPDATE
+        )
+    ),
 ) -> ProductResponse:
     """Partially update an existing product. Returns 404 if not found."""
     updates = _clean_updates(body.model_dump())
@@ -702,7 +859,14 @@ async def update_product(
         "the enrichment step."
     ),
 )
-async def delete_product(product_name: str) -> Response:
+async def delete_product(
+    product_name: str,
+    _: dict = Depends(
+        require_permission(
+            Permission.PRODUCTS_DELETE
+        )
+    ),
+) -> Response:
     """Delete a product by name. Returns 204 on success."""
     try:
         _repo.delete_product(product_name)
@@ -741,7 +905,13 @@ async def delete_product(product_name: str) -> Response:
         "sorted by employee_name then review_period ascending."
     ),
 )
-async def list_goals() -> GoalListResponse:
+async def list_goals(
+    current_user: dict = Depends(
+        require_permission(
+            Permission.GOALS_READ
+        )
+),
+) -> GoalListResponse:
     """Retrieve all goal documents from the goals collection."""
     try:
         goals = _repo.list_goals()
@@ -752,6 +922,21 @@ async def list_goals() -> GoalListResponse:
             "INTERNAL_SERVER_ERROR",
             str(exc),
         )
+    
+    if current_user["role"] == "employee":
+
+        goals = [
+            g
+            for g in goals
+            if (
+                g["employee_name"].lower()
+                ==
+                current_user.get(
+                    "employee_name",
+                    ""
+                ).lower()
+            )
+        ]
 
     return GoalListResponse(
         total=len(goals),
@@ -774,6 +959,11 @@ async def list_goals() -> GoalListResponse:
 async def get_goal(
     employee_name: str,
     review_period: str,
+    current_user: dict = Depends(
+        require_permission(
+            Permission.GOALS_READ
+        )
+    ),
 ) -> GoalResponse:
     """
     Retrieve goals for a specific employee and review period.
@@ -782,6 +972,15 @@ async def get_goal(
     The repository applies case-insensitive matching, so
     'alice johnson' and 'Alice Johnson' resolve to the same document.
     """
+    if not can_access_goal(
+        current_user,
+        employee_name,
+    ):
+        raise error_response(
+            status.HTTP_403_FORBIDDEN,
+            "FORBIDDEN",
+            "You may only access your own goals."
+        )
     try:
         goal = _repo.get_goal(employee_name, review_period)
     except ValueError as exc:
@@ -819,7 +1018,14 @@ async def get_goal(
         "performance_review workflow."
     ),
 )
-async def create_goal(body: GoalCreateRequest) -> GoalResponse:
+async def create_goal(
+    body: GoalCreateRequest,
+    _: dict = Depends(
+        require_permission(
+            Permission.GOALS_CREATE
+        )
+    ),
+) -> GoalResponse:
     """
     Create a goal record for an employee / review-period combination.
 
@@ -869,6 +1075,11 @@ async def update_goal(
     employee_name: str,
     review_period: str,
     body: GoalUpdateRequest,
+    _: dict = Depends(
+        require_permission(
+            Permission.GOALS_UPDATE
+        )
+    ),
 ) -> GoalResponse:
     """
     Partially update goals for an employee / review-period combination.
@@ -903,6 +1114,162 @@ async def update_goal(
 
     return GoalResponse(**goal)
 
+@business_router.post(
+    "/goals/{employee_name}/{review_period}/request-update",
+    response_model=GoalResponse,
+)
+async def request_goal_achievement_update(
+    employee_name: str,
+    review_period: str,
+    body: GoalAchievementUpdateRequest,
+    current_user: dict = Depends(
+        require_permission(
+            Permission.GOALS_UPDATE
+        )
+    ),
+):
+
+    if not can_access_goal(
+        current_user,
+        employee_name,
+    ):
+        raise error_response(
+            status.HTTP_403_FORBIDDEN,
+            "FORBIDDEN",
+            "You may only update your own goals.",
+        )
+
+
+
+    try:
+
+        goal = _repo.request_goal_achievement_update(
+            employee_name,
+            review_period,
+            body.goals_achieved,
+        )
+
+    except ValueError as exc:
+        raise error_response(
+            status.HTTP_404_NOT_FOUND,
+            "ENTITY_NOT_FOUND",
+            str(exc),
+        )
+
+    except RuntimeError as exc:
+        raise error_response(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            "INTERNAL_SERVER_ERROR",
+            str(exc),
+        )
+
+    return GoalResponse(**goal)
+
+@business_router.post(
+    "/goals/{employee_name}/{review_period}/review",
+    response_model=GoalResponse,
+)
+async def review_goal_update(
+    employee_name: str,
+    review_period: str,
+    body: GoalReviewRequest,
+    current_user: dict = Depends(
+        require_permission(
+            Permission.GOALS_UPDATE
+        )
+    ),
+):
+
+    if current_user["role"] not in [
+        "manager",
+        "admin",
+        "hr",
+    ]:
+        raise error_response(
+            status.HTTP_403_FORBIDDEN,
+            "FORBIDDEN",
+            "Only managers, HR and admins may review goal updates.",
+        )
+
+    try:
+
+        goal = _repo.review_goal_update(
+            employee_name=employee_name,
+            review_period=review_period,
+            approval_status=body.approval_status,
+            approver=current_user["full_name"],
+            manager_comments=body.manager_comments,
+        )
+
+    except ValueError as exc:
+        raise error_response(
+            status.HTTP_404_NOT_FOUND,
+            "ENTITY_NOT_FOUND",
+            str(exc),
+        )
+
+    except RuntimeError as exc:
+        raise error_response(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            "INTERNAL_SERVER_ERROR",
+            str(exc),
+        )
+
+    return GoalResponse(**goal)
+
+
+@business_router.get(
+    "/goals/{employee_name}/{review_period}/history",
+    response_model=
+    GoalUpdateHistoryListResponse,
+    summary="Get goal update history",
+)
+async def list_goal_update_history(
+    employee_name: str,
+    review_period: str,
+    current_user: dict = Depends(
+        require_permission(
+            Permission.GOALS_READ
+        )
+    ),
+):
+
+    if not can_access_goal(
+        current_user,
+        employee_name,
+    ):
+        raise error_response(
+            status.HTTP_403_FORBIDDEN,
+            "FORBIDDEN",
+            "You may only access your own goal history."
+        )
+
+    try:
+
+        history = (
+            _repo.list_goal_update_history(
+                employee_name,
+                review_period,
+            )
+        )
+
+    except RuntimeError as exc:
+        raise error_response(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            "INTERNAL_SERVER_ERROR",
+            str(exc),
+        )
+
+    return GoalUpdateHistoryListResponse(
+        total=len(history),
+        items=[
+            GoalUpdateHistoryResponse(
+                **item
+            )
+            for item in history
+        ],
+    )
+
 
 @business_router.delete(
     "/goals/{employee_name}/{review_period}",
@@ -917,6 +1284,11 @@ async def update_goal(
 async def delete_goal(
     employee_name: str,
     review_period: str,
+    _: dict = Depends(
+        require_permission(
+            Permission.GOALS_DELETE
+        )
+    ),
 ) -> Response:
     """Delete a goal document by composite key. Returns 204 on success."""
     try:
@@ -958,7 +1330,13 @@ async def delete_goal(
         "Changes made here are immediately visible to future workflow runs."
     ),
 )
-async def list_roles() -> RoleListResponse:
+async def list_roles(
+    _: dict = Depends(
+        require_permission(
+            Permission.BUSINESS_ROLES_READ
+        )
+    ),
+) -> RoleListResponse:
     """Retrieve all role documents."""
     try:
         roles = _repo.list_roles()
@@ -989,6 +1367,11 @@ async def list_roles() -> RoleListResponse:
 )
 async def create_role(
     body: RoleCreateRequest,
+    _: dict = Depends(
+        require_permission(
+            Permission.BUSINESS_ROLES_CREATE
+        )
+    ),
 ) -> RoleResponse:
 
     try:
@@ -1022,7 +1405,14 @@ async def create_role(
         "URL-encode spaces as %20."
     ), 
 )
-async def get_role(role: str) -> RoleResponse:
+async def get_role(
+    role: str,
+    _: dict = Depends(
+        require_permission(
+            Permission.BUSINESS_ROLES_READ
+        )
+    ),
+) -> RoleResponse:
 
     try:
         role_doc = _repo.get_role(role)
@@ -1059,6 +1449,11 @@ async def get_role(role: str) -> RoleResponse:
 async def update_role(
     role: str,
     body: RoleUpdateRequest,
+    _: dict = Depends(
+        require_permission(
+            Permission.BUSINESS_ROLES_UPDATE
+        )
+    ),
 ) -> RoleResponse:
 
     updates = _clean_updates(body.model_dump())
@@ -1098,7 +1493,14 @@ async def update_role(
         "may cause future workflow executions to fail."
     ),
 )
-async def delete_role(role: str) -> Response:
+async def delete_role(
+    role: str,
+    _: dict = Depends(
+        require_permission(
+            Permission.BUSINESS_ROLES_DELETE
+        )
+    ),
+) -> Response:
 
     try:
         _repo.delete_role(role)

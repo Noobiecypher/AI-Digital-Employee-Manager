@@ -35,27 +35,40 @@ WORKFLOWS = {
 
         Task(
             task_id="t5",
-            agent="recruitment",
-            action="prepare_offer",
+            agent="human",
+            action="hr_select_candidates",
+            approver_role="HR",
             depends_on=["t4"]
         ),
 
-        # Human-in-the-Loop Approval Gate
-        # Approved -> continue workflow
-        # Rejected -> fail workflow
-
         Task(
             task_id="t6",
-            agent="human",
-            action="manager_approval",
+            agent="recruitment",
+            action="prepare_offer",
             depends_on=["t5"]
         ),
 
         Task(
             task_id="t7",
+            agent="human",
+            action="hr_offer_approval",
+            approver_role="HR",
+            depends_on=["t6"]
+        ),
+
+        Task(
+            task_id="t8",
+            agent="human",
+            action="manager_approval",
+            approver_role="MANAGER",
+            depends_on=["t7"]
+        ),
+
+        Task(
+            task_id="t9",
             agent="reporting",
             action="generate_hiring_summary",
-            depends_on=["t6"]
+            depends_on=["t8"]
         ),
     ],
 
@@ -140,8 +153,13 @@ WORKFLOWS = {
             action="generate_campaign_summary",
             depends_on=["t3","t4","t5"]
         ),
+        Task(
+            task_id="t7",
+            agent="human",
+            action="manager_approval",
+            depends_on=["t6"]
+        ),
     ],
-
     "performance_report": [
 
         Task(

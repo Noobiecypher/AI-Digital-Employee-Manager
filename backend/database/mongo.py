@@ -31,7 +31,7 @@ import logging
 import os
 
 from dotenv import load_dotenv
-import certifi
+
 from pymongo import MongoClient
 from pymongo.collection import Collection
 from pymongo.errors import ConfigurationError, ConnectionFailure
@@ -86,10 +86,9 @@ def get_client() -> MongoClient:
 
     try:
         candidate: MongoClient = MongoClient(
-    uri,
-    serverSelectionTimeoutMS=_SERVER_SELECTION_TIMEOUT_MS,
-    tlsCAFile=certifi.where(),
-)
+            uri,
+            serverSelectionTimeoutMS=_SERVER_SELECTION_TIMEOUT_MS,
+        )
         # Verify the server is reachable — raises ConnectionFailure if not.
         candidate.admin.command("ping")
         _client = candidate
@@ -104,6 +103,15 @@ def get_client() -> MongoClient:
 
     return _client
 
+def get_users_collection() -> Collection:
+    """
+    Return the users collection.
+
+    Stores system user accounts for authentication and authorization.
+    Completely separate from the business roles collection.
+    """
+    db_name: str = os.getenv("MONGO_DB_NAME", _DEFAULT_DB_NAME)
+    return get_client()[db_name]["users"]
 
 def get_workflows_collection() -> Collection:
     """
@@ -168,6 +176,26 @@ def get_goals_collection() -> Collection:
     db_name: str = os.getenv("MONGO_DB_NAME", _DEFAULT_DB_NAME)
     return get_client()[db_name]["goals"]
 
+
+def get_goal_update_history_collection() -> Collection:
+    """
+    Return the 'goal_update_history' collection from
+    the configured database.
+
+    Stores every goal update review event
+    (approved/rejected) for audit purposes.
+
+    Returns:
+        pymongo Collection object.
+    """
+    db_name: str = os.getenv(
+        "MONGO_DB_NAME",
+        _DEFAULT_DB_NAME,
+    )
+
+    return get_client()[db_name][
+        "goal_update_history"
+    ]
 
 def get_products_collection() -> Collection:
     """

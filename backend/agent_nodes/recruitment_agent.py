@@ -399,8 +399,9 @@ No explanation. Just the skill list.
         self, task: Task, state: AgentState
     ) -> dict:
 
-        t3          = self.get_output(state, "t3")
+        t3 = self.get_output(state, "t3")
         shortlisted = t3["shortlisted_candidates"]
+
         params: HireEmployeeParams = state.params
 
         if not shortlisted:
@@ -408,27 +409,88 @@ No explanation. Just the skill list.
                 "No shortlisted candidates to prepare offer for."
             )
 
-        selected = max(shortlisted, key=lambda c: c["match_score"])
-        salary = self._parse_salary_midpoint(params.salary_range)
+        # ----------------------------------------------------------
+        # Candidate Selection
+        # ----------------------------------------------------------
+        # Future enhancement:
+        # HR may select one or more candidates via a human task.
+        #
+        # Expected shape:
+        #
+        # state.human_input_data = {
+        #     "selected_candidates": [
+        #         "John Doe",
+        #         "Jane Smith"
+        #     ]
+        # }
+        #
+        # Until that feature exists, preserve current behavior by
+        # automatically selecting the highest-scoring candidate.
+        # ----------------------------------------------------------
 
-        offer = OfferDetails(
-            candidate_name = selected["name"],
-            role           = params.role,
-            department     = params.department,
-            salary         = salary,
-            location       = params.location,
-            job_type       = params.job_type,
+        selected_names = state.human_input_data.get(
+            "selected_candidates",
+            []
         )
 
-        # Follow-up email — congratulates selected candidate.
-        send_followup_email(
-            to_email       = selected.get("email", ""),
-            stage          = FollowUpStage.OFFER_EXTENDED,
-            candidate_name = selected["name"],
-            role           = params.role,
+        if selected_names:
+
+            selected_candidates = [
+                candidate
+                for candidate in shortlisted
+                if candidate["name"] in selected_names
+            ]
+
+            if not selected_candidates:
+                raise ValueError(
+                    "No valid selected candidates found in "
+                    "human_input_data."
+                )
+
+        else:
+            # Current behavior (backward compatibility)
+            selected_candidates = [
+                max(
+                    shortlisted,
+                    key=lambda c: c["match_score"]
+                )
+            ]
+
+        salary = self._parse_salary_midpoint(
+            params.salary_range
         )
 
-        return {"offer_details": offer.model_dump()}
+        offers = []
+
+        for candidate in selected_candidates:
+
+            offer = OfferDetails(
+                candidate_name=candidate["name"],
+                role=params.role,
+                department=params.department,
+                salary=salary,
+                location=params.location,
+                job_type=params.job_type,
+            )
+
+            offers.append(
+                offer.model_dump()
+            )
+
+            # Follow-up email — congratulates selected candidate.
+            send_followup_email(
+                to_email=candidate.get("email", ""),
+                stage=FollowUpStage.OFFER_EXTENDED,
+                candidate_name=candidate["name"],
+                role=params.role,
+            )
+
+        # Preserve current API response shape for existing consumers.
+        # Once frontend/reporting are updated, this can always return a list.
+
+        return {
+            "offer_details": offers
+        }
 
     # ----------------------------------------------------------
     # PRIVATE HELPERS

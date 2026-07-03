@@ -16,27 +16,40 @@ export default function WorkflowHistory() {
   const [search, setSearch]       = useState('')
 
   useEffect(() => {
-    workflowsApi.getAll()
-      .then(res => setWorkflows([...(res?.workflows || res || [])].reverse()))
+    workflowsApi.getHistory()
+      .then(res => {
+        // API returns array directly (after fix) or {items:[]}
+        const arr = Array.isArray(res) ? res : res?.items || []
+        setWorkflows([...arr].reverse())
+      })
       .catch(err => toast.error('Failed to load', err.message))
       .finally(() => setLoading(false))
   }, [])
 
   const filtered = workflows.filter(w =>
     !search ||
-    w.workflow_type?.toLowerCase().includes(search.toLowerCase()) ||
-    (w._id || w.id)?.toLowerCase().includes(search.toLowerCase())
+    w.objective_id?.toLowerCase().includes(search.toLowerCase()) ||
+    w.workflow_id?.toLowerCase().includes(search.toLowerCase())
   )
 
+  function getStatus(wf) {
+    if (wf.awaiting_human_input) return 'waiting_for_human'
+    return wf.status || 'pending'
+  }
+
   const columns = [
-    { key: 'workflow_type', label: 'Type',
+    { key: 'objective_id', label: 'Type',
       render: v => <span style={{ fontWeight: 500 }}>{v?.replace(/_/g, ' ')?.replace(/\b\w/g, c => c.toUpperCase()) || '—'}</span>
     },
-    { key: '_id', label: 'Workflow ID',
-      render: (v, row) => <span style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--color-text-muted)' }}>{v || row.id}</span>
+    { key: 'workflow_id', label: 'Workflow ID',
+      render: v => <span style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--color-text-muted)' }}>{v}</span>
     },
-    { key: 'state', label: 'Status',
-      render: v => { const m = STATE_META[v] || {}; return <StatusBadge label={m.label || v} color={m.color} /> }
+    { key: 'status', label: 'Status',
+      render: (_, row) => {
+        const s = getStatus(row)
+        const m = STATE_META[s] || {}
+        return <StatusBadge label={m.label || s} color={m.color} />
+      }
     },
     { key: 'created_at', label: 'Started',
       render: v => v ? new Date(v).toLocaleString() : '—'
@@ -44,7 +57,7 @@ export default function WorkflowHistory() {
     { key: 'view', label: '', align: 'right', width: 80,
       render: (_, row) => (
         <button
-          onClick={e => { e.stopPropagation(); navigate(`/workflows/${row._id || row.id}`) }}
+          onClick={e => { e.stopPropagation(); navigate(`/workflows/${row.workflow_id}`) }}
           style={{
             padding: '4px 10px', borderRadius: 6, fontSize: 12, fontWeight: 500,
             border: '1px solid var(--color-border)', background: 'transparent',
@@ -63,7 +76,7 @@ export default function WorkflowHistory() {
         data={filtered}
         loading={loading}
         emptyMessage="No workflow history yet"
-        onRowClick={row => navigate(`/workflows/${row._id || row.id}`)}
+        onRowClick={row => navigate(`/workflows/${row.workflow_id}`)}
       />
     </div>
   )

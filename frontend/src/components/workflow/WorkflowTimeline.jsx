@@ -1,8 +1,11 @@
-import { STATE_META } from '../../constants/workflowStates'
-import StatusBadge from '../ui/StatusBadge'
+import { useState } from 'react'
 
-export default function WorkflowTimeline({ taskOutputs = {}, state }) {
-  const entries = Object.entries(taskOutputs)
+export default function WorkflowTimeline({ taskOutputs = [] }) {
+  // API returns task_outputs as an array of {task_id, output, ...}
+  // But handle both array and object shapes defensively
+  const entries = Array.isArray(taskOutputs)
+    ? taskOutputs.map(t => [t.task_id || t.id, t.output ?? t])
+    : Object.entries(taskOutputs)
 
   if (entries.length === 0) {
     return (
@@ -57,20 +60,22 @@ function TimelineStep({ taskId, output, index, isLast }) {
           style={{
             background: 'var(--color-bg-surface)',
             border: '1px solid var(--color-border)',
-            borderRadius: 'var(--radius-md)',
+            borderRadius: expanded ? 'var(--radius-md) var(--radius-md) 0 0' : 'var(--radius-md)',
             padding: '10px 14px',
             cursor: 'pointer',
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           }}
         >
           <span style={{ fontWeight: 500, fontSize: 13, color: 'var(--color-text-primary)' }}>
-            {taskId.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+            {String(taskId).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
           </span>
-          <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{expanded ? '▲ Hide' : '▼ View'}</span>
+          <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+            {expanded ? '▲ Hide' : '▼ View'}
+          </span>
         </div>
         {expanded && (
           <div style={{
-            background: '#F8F9FC',
+            background: 'var(--color-bg-elevated)',
             border: '1px solid var(--color-border)',
             borderTop: 'none',
             borderRadius: '0 0 var(--radius-md) var(--radius-md)',
@@ -91,6 +96,3 @@ function TimelineStep({ taskId, output, index, isLast }) {
     </div>
   )
 }
-
-// Need useState import
-import { useState } from 'react'

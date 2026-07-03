@@ -24,7 +24,6 @@ async function request(path, options = {}) {
   }
 
   if (res.status === 401) {
-    // Token expired or invalid — force logout
     localStorage.removeItem('auth_token')
     localStorage.removeItem('auth_user')
     window.location.href = '/login'
@@ -33,7 +32,10 @@ async function request(path, options = {}) {
 
   if (!res.ok) {
     const error = await res.json().catch(() => ({ detail: res.statusText }))
-    throw new Error(error.detail || `Request failed: ${res.status}`)
+    const msg = typeof error.detail === 'string'
+      ? error.detail
+      : error.detail?.error?.message || error.detail?.message || `Request failed: ${res.status}`
+    throw new Error(msg)
   }
 
   if (res.status === 204) return null

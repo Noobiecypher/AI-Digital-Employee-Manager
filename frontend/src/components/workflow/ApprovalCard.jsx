@@ -1,29 +1,39 @@
 import StatusBadge from '../ui/StatusBadge'
-import { STATE_META } from '../../constants/workflowStates'
 
 export default function ApprovalCard({ workflow, onApprove, onReject, loading }) {
-  const meta = STATE_META[workflow.state] || {}
   const workflowId = workflow.workflow_id || workflow._id || workflow.id
+
+  const title = (workflow.objective_id || workflow.workflow_type || 'Workflow')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, c => c.toUpperCase())
+
+  // Paused + awaiting input = needs approval
+  const needsApproval = workflow.awaiting_human_input === true || workflow.status === 'paused'
+  const badgeLabel = needsApproval ? 'Awaiting Approval' : (workflow.status || 'pending')
+  const badgeColor = needsApproval ? '#F59E0B' : undefined
 
   return (
     <div style={{
       background: 'var(--color-bg-surface)',
       border: '1px solid var(--color-border)',
-      borderLeft: '4px solid var(--color-warning-text)',
+      borderLeft: '4px solid #F59E0B',
       borderRadius: 'var(--radius-lg)',
       padding: '16px 20px',
       boxShadow: 'var(--shadow-sm)',
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
         <div>
-          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>
-            {workflow.workflow_type?.replace(/_/g, ' ')?.replace(/\b\w/g, c => c.toUpperCase()) || 'Workflow'}
+          <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--color-text-primary)', marginBottom: 4 }}>
+            {title}
           </div>
           <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
             ID: {workflowId}
           </div>
+          <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 2 }}>
+            Created: {workflow.created_at ? new Date(workflow.created_at).toLocaleString() : '—'}
+          </div>
         </div>
-        <StatusBadge label={meta.label || workflow.state} color={meta.color} />
+        <StatusBadge label={badgeLabel} color={badgeColor} />
       </div>
 
       {workflow.result && (
@@ -36,10 +46,22 @@ export default function ApprovalCard({ workflow, onApprove, onReject, loading })
           color: 'var(--color-text-primary)',
           lineHeight: 1.6,
           marginBottom: 14,
+          maxHeight: 120,
+          overflowY: 'auto',
         }}>
           {typeof workflow.result === 'string'
             ? workflow.result
             : JSON.stringify(workflow.result, null, 2)}
+        </div>
+      )}
+
+      {workflow.error_message && (
+        <div style={{
+          background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)',
+          borderRadius: 'var(--radius-md)', padding: '10px 12px',
+          fontSize: 12, color: '#EF4444', marginBottom: 14,
+        }}>
+          {workflow.error_message}
         </div>
       )}
 
@@ -54,7 +76,7 @@ export default function ApprovalCard({ workflow, onApprove, onReject, loading })
             opacity: loading ? 0.6 : 1,
           }}
         >
-          Approve
+          ✓ Approve
         </button>
         <button
           onClick={() => onReject(workflowId)}
@@ -67,7 +89,7 @@ export default function ApprovalCard({ workflow, onApprove, onReject, loading })
             opacity: loading ? 0.6 : 1,
           }}
         >
-          Reject
+          ✕ Reject
         </button>
       </div>
     </div>

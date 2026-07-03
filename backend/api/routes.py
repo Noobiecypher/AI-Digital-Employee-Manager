@@ -8,6 +8,15 @@ from fastapi import (
     BackgroundTasks,
     HTTPException,
     Query,
+    Depends,
+)
+
+from backend.auth.dependencies import (
+    require_permission,
+)
+
+from backend.auth.permissions import (
+    Permission,
 )
 
 from pydantic import ValidationError
@@ -247,6 +256,11 @@ def build_workflow_response(state) -> WorkflowResponse:
 async def start_workflow_route(
     body: StartWorkflowRequest,
     background_tasks: BackgroundTasks,
+    _: dict = Depends(
+        require_permission(
+            Permission.WORKFLOWS_CREATE
+        )
+    ),
 ):
 
     planner_input = build_planner_input(
@@ -290,6 +304,11 @@ async def start_workflow_route(
 )
 async def get_workflow_route(
     workflow_id: str,
+    _: dict = Depends(
+        require_permission(
+            Permission.WORKFLOWS_READ
+        )
+    ),
 ):
     try:
         state = load_state(workflow_id)
@@ -312,6 +331,11 @@ async def resume_workflow_route(
     workflow_id: str,
     body: ResumeWorkflowRequest,
     background_tasks: BackgroundTasks,
+    _: dict = Depends(
+        require_permission(
+            Permission.WORKFLOWS_APPROVE
+        )
+    ),
 ):
     try:
         state = load_state(workflow_id)
@@ -365,6 +389,7 @@ async def resume_workflow_route(
             workflow_id,
             body.approval_status,
             body.human_feedback,
+            body.human_input_data,
         )
 
         return ResumeWorkflowResponse(
@@ -384,6 +409,7 @@ async def resume_workflow_route(
         workflow_id,
         body.approval_status,
         body.human_feedback,
+        body.human_input_data,
     )
 
     return ResumeWorkflowResponse(
@@ -404,6 +430,11 @@ async def resume_workflow_route(
     response_model=WorkflowListResponse,
 )
 async def list_workflows_route(
+    _: dict = Depends(
+        require_permission(
+            Permission.WORKFLOWS_READ
+        )
+    ),
     status: str | None = Query(
         default=None
     ),
@@ -485,7 +516,13 @@ async def list_workflows_route(
     "/report/analytics",
     status_code=200,
 )
-async def get_latest_report():
+async def get_latest_report(
+    _: dict = Depends(
+        require_permission(
+            Permission.ANALYTICS_READ
+        )
+    ),
+):
 
     if _reporting_agent is None:
         raise HTTPException(
