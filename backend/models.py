@@ -38,6 +38,9 @@ class SalesOutreachParams(BaseModel):
     product_name: str = ""
     pain_points: list[str] = []
 
+    # Optional recipients for outreach
+    recipients: list[str] = []
+
 
 class PerformanceReportParams(BaseModel):
     report_period: str

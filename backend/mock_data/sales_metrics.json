@@ -1,0 +1,21 @@
+{
+  "periods": {
+    "Q1 2026": {
+      "company": {"revenue_inr": 12000000, "deals_won": 28, "pipeline_inr": 35000000, "win_rate_pct": 22, "outreach_sent": 1200, "demos_booked": 64},
+      "by_department": {
+        "Sales": {"revenue_inr": 9000000, "deals_won": 22, "pipeline_inr": 26000000, "win_rate_pct": 24, "outreach_sent": 900, "demos_booked": 48},
+        "Partnerships": {"revenue_inr": 3000000, "deals_won": 6, "pipeline_inr": 9000000, "win_rate_pct": 18, "outreach_sent": 300, "demos_booked": 16}
+      }
+    },
+    "Q4 2025": {
+      "company": {"revenue_inr": 9500000, "deals_won": 21, "pipeline_inr": 28000000, "win_rate_pct": 20, "outreach_sent": 1050, "demos_booked": 52},
+      "by_department": {
+        "Sales": {"revenue_inr": 7200000, "deals_won": 17, "pipeline_inr": 21000000, "win_rate_pct": 21, "outreach_sent": 800, "demos_booked": 40},
+        "Partnerships": {"revenue_inr": 2300000, "deals_won": 4, "pipeline_inr": 7000000, "win_rate_pct": 16, "outreach_sent": 250, "demos_booked": 12}
+      }
+    }
+  },
+  "default_period": {
+    "company": {"revenue_inr": 10000000, "deals_won": 24, "pipeline_inr": 30000000, "win_rate_pct": 21, "outreach_sent": 1100, "demos_booked": 55}
+  }
+}

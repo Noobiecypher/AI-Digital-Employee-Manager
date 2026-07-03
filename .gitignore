@@ -35,4 +35,7 @@ dist/
 build/
 
 # Misc
-*.sqlite3.env
+*.sqlite3
+
+# Runtime uploads
+uploads/

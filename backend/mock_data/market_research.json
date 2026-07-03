@@ -1,0 +1,53 @@
+{
+  "topics": [
+    {
+      "research_topic": "AI HR tools in India",
+      "market_overview": "India's HR-tech market is expanding as mid-market firms automate operations; buyers are price-sensitive and want fast time-to-value, with data-localisation and compliance as recurring concerns.",
+      "trends": [
+        "Mid-market adoption of AI-driven HR automation is accelerating",
+        "Buyers favour fast onboarding and clear ROI over breadth",
+        "Data localisation and compliance shape vendor selection"
+      ],
+      "data_points": [
+        {"metric": "Mid-market AI-HR adoption", "value": "rising", "note": "fastest-growing segment"},
+        {"metric": "Avg. buyer priority", "value": "time-to-value", "note": "over feature breadth"}
+      ],
+      "competitors": [
+        {"name": "Darwinbox", "strengths": ["Enterprise footprint", "Broad HRMS"], "weaknesses": ["Heavy implementation", "Not automation-first"]},
+        {"name": "Keka", "strengths": ["SMB popularity", "Clean UX"], "weaknesses": ["Limited AI workflows"]},
+        {"name": "Zoho People", "strengths": ["Low cost", "Ecosystem"], "weaknesses": ["Generic positioning"]}
+      ]
+    },
+    {
+      "research_topic": "AI sales engagement tools",
+      "market_overview": "The sales-engagement category is consolidating prospecting, sequencing and analytics; differentiation is shifting from data volume to research-grounded personalisation.",
+      "trends": [
+        "Consolidation of prospecting and engagement into single platforms",
+        "Personalisation grounded in account research is becoming table stakes",
+        "AI copy quality is a key buying criterion"
+      ],
+      "data_points": [
+        {"metric": "Personalisation expectation", "value": "high", "note": "generic copy underperforms"},
+        {"metric": "Tool consolidation", "value": "increasing", "note": "buyers reduce point tools"}
+      ],
+      "competitors": [
+        {"name": "Outreach.io", "strengths": ["Category leader", "Analytics"], "weaknesses": ["Expensive", "Heavy setup"]},
+        {"name": "Apollo.io", "strengths": ["Large database", "Affordable"], "weaknesses": ["Generic AI copy"]},
+        {"name": "Salesloft", "strengths": ["Strong cadences"], "weaknesses": ["Enterprise-leaning pricing"]}
+      ]
+    }
+  ],
+  "default": {
+    "market_overview": "Buyers across this category are consolidating tools, demanding measurable ROI, and adopting AI automation where it shortens time-to-value.",
+    "trends": [
+      "Tool consolidation and ROI scrutiny",
+      "Growing adoption of AI automation",
+      "Preference for fast onboarding and low setup cost"
+    ],
+    "data_points": [],
+    "competitors": [
+      {"name": "Incumbent suite vendors", "strengths": ["Established brand", "Broad coverage"], "weaknesses": ["Limited AI-native automation", "Slower time-to-value"]},
+      {"name": "Point-solution tools", "strengths": ["Focused", "Affordable"], "weaknesses": ["Narrow scope", "Integration overhead"]}
+    ]
+  }
+}

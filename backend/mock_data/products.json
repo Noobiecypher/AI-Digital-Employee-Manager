@@ -9,6 +9,98 @@
       "sales outreach is time-consuming",
       "reporting requires manual data gathering"
     ],
-    "target_industries": ["SaaS", "IT Services", "Startups", "Enterprise"]
+    "target_industries": ["SaaS", "IT Services", "Startups", "Enterprise"],
+    "target_segments": ["Mid-market HR teams", "Fast-scaling startups", "RPO & staffing firms"],
+    "key_features": [
+      "Planner that decomposes a business objective into dependent tasks",
+      "Specialized AI agents for HR, recruitment, sales, and research",
+      "Human-in-the-loop approvals on sensitive actions",
+      "Auto-generated KPI dashboards and executive summaries"
+    ],
+    "differentiators": [
+      "Native agentic workflows, not a bolt-on chatbot",
+      "Strict schema validation keeps multi-agent output reliable",
+      "Runs on local LLMs — no per-call API cost or data leaving the org"
+    ],
+    "value_props": [
+      "Cut repetitive HR and ops work by automating end-to-end workflows",
+      "Shorten hiring cycles with automated screening and scheduling",
+      "Scale outreach and reporting without adding headcount"
+    ],
+    "competitors": [
+      {"name": "Darwinbox", "strengths": ["Strong enterprise footprint in India", "Broad HRMS suite"], "weaknesses": ["Heavy implementation", "Not automation-first"]},
+      {"name": "Keka", "strengths": ["Popular with SMBs", "Clean UX", "Affordable"], "weaknesses": ["Limited AI/agent workflows", "Narrow beyond core HR"]},
+      {"name": "Zoho People", "strengths": ["Low cost", "Tight Zoho ecosystem"], "weaknesses": ["Generic", "Not positioned as autonomous AI employees"]}
+    ],
+    "market_trends": [
+      "Mid-market firms are consolidating point tools and demanding measurable ROI",
+      "Rising appetite for AI automation across HR and revenue operations",
+      "Buyers prioritise fast time-to-value and data localisation"
+    ]
+  },
+  {
+    "product_name": "OutreachIQ",
+    "description": "An AI sales-engagement tool that drafts multichannel outreach sequences and call scripts grounded in live account research.",
+    "pain_points": [
+      "reps spend hours writing cold emails",
+      "low reply rates from generic messaging",
+      "no consistent qualification process",
+      "outreach does not scale without more headcount"
+    ],
+    "target_industries": ["SaaS", "B2B Services", "Fintech"],
+    "target_segments": ["SMB sales teams", "Outbound SDR orgs", "Founder-led sales"],
+    "key_features": [
+      "Research-grounded email sequence generation",
+      "Discovery-call script builder",
+      "Multichannel cadence across email and LinkedIn"
+    ],
+    "differentiators": [
+      "Outreach is generated from synthesized account research, not templates",
+      "Built-in qualification questions in every call script"
+    ],
+    "value_props": [
+      "Triple SDR output without sacrificing personalization",
+      "Lift reply rates with pain-led, segment-specific messaging"
+    ],
+    "competitors": [
+      {"name": "Outreach.io", "strengths": ["Category leader", "Deep analytics"], "weaknesses": ["Expensive", "Heavy setup"]},
+      {"name": "Apollo.io", "strengths": ["Large contact database", "Affordable"], "weaknesses": ["Generic AI copy", "Data quality varies"]}
+    ],
+    "market_trends": [
+      "Buyers expect personalised, research-backed outreach",
+      "Consolidation of prospecting and engagement into single tools"
+    ]
+  },
+  {
+    "product_name": "InsightDeck",
+    "description": "An AI market-research and reporting assistant that compiles competitor analysis and executive summaries from structured sources.",
+    "pain_points": [
+      "market research is slow and manual",
+      "competitor intelligence is scattered",
+      "reports take days to compile"
+    ],
+    "target_industries": ["Consulting", "SaaS", "Venture & PE"],
+    "target_segments": ["Strategy teams", "Product marketing", "Founders"],
+    "key_features": [
+      "Automated competitor breakdowns",
+      "Synthesized findings and recommendations",
+      "Formatted executive reports"
+    ],
+    "differentiators": [
+      "Structured, source-grounded output rather than free-form text",
+      "Multiple output formats (summary, detailed, comparison table)"
+    ],
+    "value_props": [
+      "Turn days of research into minutes",
+      "Consistent, decision-ready competitor analysis"
+    ],
+    "competitors": [
+      {"name": "Crayon", "strengths": ["Competitive intel automation"], "weaknesses": ["Pricey for small teams"]},
+      {"name": "Klue", "strengths": ["Battlecards", "Sales enablement"], "weaknesses": ["Narrow to compete-intel use case"]}
+    ],
+    "market_trends": [
+      "Growing demand for always-on competitive intelligence",
+      "Shift from manual decks to automated, structured research"
+    ]
   }
 ]

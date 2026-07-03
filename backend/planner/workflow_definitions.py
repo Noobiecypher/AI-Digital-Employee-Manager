@@ -149,9 +149,24 @@ WORKFLOWS = {
 
         Task(
             task_id="t6",
+            agent="human",
+            action="approve_outreach_campaign",
+            approver_role="MANAGER",
+            depends_on=["t4", "t5"]
+        ),
+
+        Task(
+            task_id="t7",
+            agent="sales",
+            action="send_outreach",
+            depends_on=["t6"]
+        ),
+
+        Task(
+            task_id="t8",
             agent="reporting",
             action="generate_campaign_summary",
-            depends_on=["t3","t4","t5"]
+            depends_on=["t7"]
         ),
         Task(
             task_id="t7",

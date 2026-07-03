@@ -95,17 +95,17 @@ They are not validation errors and must never be returned as HTTP 422 responses.
 | Status | Meaning | Terminal |
 |--------|---------|----------|
 | `running` | Executor is actively processing tasks | No |
-| `paused` | Halted at human approval gate (`hire_employee` only) | No |
+| `paused` | Halted at human approval gate  | No |
 | `completed` | All tasks finished successfully | Yes |
 | `failed` | Stopped due to agent error or rejected approval | Yes |
 
-`approval_status` is a separate field and only applies to the `hire_employee` workflow's manager gate.
+`approval_status` is a workflow-level field used by workflows containing human approval gates.
 
 | Approval Status | Meaning |
 |-----------------|---------|
 | `pending` | Gate not yet reached, or awaiting decision |
-| `approved` | Manager approved the offer |
-| `rejected` | Manager rejected the offer |
+| `approved` | The current human approval gate was approved |
+| `rejected` | The current human approval gate was rejected |
 
 ---
 
@@ -115,7 +115,7 @@ Validates the request, creates `AgentState`, and begins sequential task executio
 
 **Executor call:** `start_workflow(planner_input: PlannerInput) -> AgentState`
 
-Because workflows can run multiple AI tasks sequentially (up to 7 tasks for `hire_employee`), this endpoint dispatches execution asynchronously via a FastAPI `BackgroundTask` and returns `202 Accepted` immediately. The client polls `GET /workflows/{workflow_id}` to track progress.
+Because workflows can run multiple AI tasks sequentially (up to 9 tasks for `hire_employee`), this endpoint dispatches execution asynchronously via a FastAPI `BackgroundTask` and returns `202 Accepted` immediately. The client polls `GET /workflows/{workflow_id}` to track progress.
 
 ### Request
 
@@ -233,7 +233,7 @@ The response shape is identical across all statuses. Fields that are not applica
   "workflow_id": "wf_3f8a2c1d-7e4b-4a12-9f3e-1b2c3d4e5f6a",
   "objective_id": "hire_employee",
   "status": "paused",
-  "current_task_id": "t6",
+  "current_task_id": "t7",
   "current_agent": "human",
   "awaiting_human_input": true,
   "approval_status": "pending",
@@ -256,9 +256,9 @@ The response shape is identical across all statuses. Fields that are not applica
 | `current_task_id` | `string` | Active task ID (`"t3"`) or `""` when idle/terminal |
 | `current_agent` | `string` | Active agent name or `""` when idle/terminal |
 | `awaiting_human_input` | `boolean` | `true` only when paused at human gate — triggers approval UI |
-| `approval_status` | `string` | `pending` \| `approved` \| `rejected` — meaningful for `hire_employee` only |
-| `approval_context` | `object` \| `null` | Manager-facing approval information. Present only when awaiting human approval. Null otherwise. |
-| `human_feedback` | `string \| null` | Manager's comment submitted with approval decision |
+| `approval_status` | `string` | `pending` \| `approved` \| `rejected` — meaningful for workflows containing human approval gates |
+| `approval_context` | `object` \| `null` | Human-approval-facing business information for the current gate. Present only when awaiting human approval. Null otherwise. |
+| `human_feedback` | `string \| null` | Most recent human approver comment submitted with an approval decision |
 | `error_message` | `string \| null` | Populated when `status == "failed"`; `null` otherwise |
 | `result` | `object \| null` | Final task output dict when `status == "completed"`; `null` otherwise |
 | `created_at` | `string` | ISO 8601 UTC — workflow creation timestamp |
@@ -271,7 +271,7 @@ Present only when:
 - status == "paused"
 - awaiting_human_input == true
 
-Contains the information required by a manager to make an approval decision.
+Contains the information required by the current approver (HR or Manager) to make an approval decision.
 
 This field intentionally exposes only approval-facing business data and does not expose raw workflow outputs or internal AgentState structures.
 
@@ -315,13 +315,13 @@ Populated only when `status == "completed"`. Contains the output dict of the fin
 }
 ```
 
-**Status: `paused`** (hire_employee, at t6 manager_approval gate)
+**Status: `paused`** (workflow awaiting human approval)
 ```json
 {
   "workflow_id": "wf_abc123",
   "objective_id": "hire_employee",
   "status": "paused",
-  "current_task_id": "t6",
+  "current_task_id": "t7",
   "current_agent": "human",
   "awaiting_human_input": true,
 
@@ -379,7 +379,7 @@ Populated only when `status == "completed"`. Contains the output dict of the fin
 }
 ```
 
-**Status: `failed` — manager rejected offer**
+**Status: `failed` — human approver rejected workflow**
 ```json
 {
   "workflow_id": "wf_abc123",
@@ -415,11 +415,14 @@ Populated only when `status == "completed"`. Contains the output dict of the fin
 
 ## 6. POST /workflows/{workflow_id}/resume
 
-Submits the human approval decision for a paused workflow. Only valid when `status == "paused"` and `awaiting_human_input == true`. Applicable only to `hire_employee` workflows in MVP.
+Submits the human approval decision for a paused workflow. Only valid when `status == "paused"` and `awaiting_human_input == true`.
 
-**Executor call:** `resume_workflow(workflow_id, approval_status, human_feedback) -> AgentState`
+**Executor call:** `resume_workflow(workflow_id, approval_status, human_feedback,human_input_data) -> AgentState`
 
-Returns `202 Accepted`. The executor runs the remaining task (`t7 generate_hiring_summary`) in the background for approval; for rejection the workflow immediately fails with no further execution.
+Returns `202 Accepted`. 
+For approved decisions, the executor resumes workflow execution from the next task and continues until the next human gate or workflow completion.
+
+For rejected decisions, the workflow immediately transitions to `failed` with no further execution.
 
 ### Request
 
@@ -438,7 +441,9 @@ Content-Type: application/json
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `approval_status` | `string` | Yes | Must be exactly `"approved"` or `"rejected"` |
-| `human_feedback` | `string \| null` | No | Manager's comments. Optional for both approved and rejected decisions. Max 2000 characters. |
+| `human_feedback` | `string \| null` | No | Human approver comments. Optional for both approved and rejected decisions. Max 2000 characters. |
+| `human_input_data` | `object \| null` | No | Optional structured metadata for approval tasks (e.g. selected candidates). |
+
 
 ### Validation Rules
 
@@ -535,8 +540,7 @@ Content-Type: application/json
 
 ## 7. GET /workflows
 
-Returns a paginated list of workflows. Primarily useful for the manager dashboard to surface pending approvals and track recent runs.
-
+Returns a paginated list of workflows. Primarily useful for HR and manager dashboards to surface pending approvals and track recent runs.
 ### Request
 
 ```
@@ -588,7 +592,7 @@ List items are intentionally trimmed — `current_task_id`, `error_message`, `re
 GET /workflows?status=paused
 ```
 
-Returns all `hire_employee` workflows awaiting a manager decision.
+Returns all workflows awaiting an HR or Manager decision.
 
 ---
 

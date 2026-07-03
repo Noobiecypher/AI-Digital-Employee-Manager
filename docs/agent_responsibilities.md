@@ -29,7 +29,7 @@ def execute(task: Task, state: AgentState) -> dict
 | t2   | identify_required_skills  | Identify role requirements and hiring criteria   | `{"required_skills": list[str]}`                |
 | t3   | shortlist_candidates      | Filter candidates against role requirements      | `{"shortlisted_candidates": list[Candidate]}`   |
 | t4   | schedule_interviews       | Create interview schedule for shortlisted candidates | `{"interview_schedule": list[InterviewSchedule]}` |
-| t5   | prepare_offer             | Prepare hiring offer for the highest-scoring candidate | `{"offer_details": OfferDetails}`          |
+| t6 | prepare_offer | Prepare hiring offer(s) for HR-selected candidate(s). Falls back to highest-scoring candidate if no human selection exists. | {"offer_details": list[OfferDetails]} |
 
 ---
 
@@ -75,6 +75,7 @@ def execute(task: Task, state: AgentState) -> dict
 | t3   | create_outreach_strategy | Create campaign strategy           | `{"outreach_strategy": OutreachStrategy}` |
 | t4   | generate_email_sequence  | Generate outreach emails           | `{"email_sequence": list[str]}`         |
 | t5   | generate_call_scripts    | Generate sales call scripts        | `{"call_scripts": list[str]}`           |
+| t7 | send_outreach | Send approved outreach emails | `{"send_statistics": dict}` |
 
 ### performance_report
 
@@ -113,9 +114,9 @@ def execute(task: Task, state: AgentState) -> dict
 
 | Workflow           | Task | Action                    | Purpose                                         | Output                                      |
 |--------------------|------|---------------------------|-------------------------------------------------|---------------------------------------------|
-| hire_employee      | t7   | generate_hiring_summary   | Generate final hiring summary                   | `{"hiring_summary": str}`                   |
+| hire_employee      | t9   | generate_hiring_summary   | Generate final hiring summary                   | `{"hiring_summary": str}`                   |
 | onboard_employee   | t5   | generate_summary          | Generate onboarding summary                     | `{"summary": str}`                          |
-| sales_outreach     | t6   | generate_campaign_summary | Generate outreach campaign summary              | `{"campaign_summary": str}`                 |
+| sales_outreach     | t8   | generate_campaign_summary | Generate outreach campaign summary              | `{"campaign_summary": str}`                 |
 | performance_report | t3   | aggregate_results         | Aggregate HR and sales metrics                  | `{"aggregated_metrics": AggregatedMetrics}` |
 | performance_report | t4   | generate_kpi_dashboard    | Build KPI dashboard from aggregated metrics     | `{"kpi_dashboard": KPIDashboard}`           |
 | performance_report | t5   | generate_executive_summary | Summarise KPI dashboard for leadership         | `{"executive_summary": str}`                |
@@ -129,7 +130,30 @@ def execute(task: Task, state: AgentState) -> dict
 
 The human approval gate is **not an agent**. It is a Workflow Executor checkpoint that pauses execution and awaits an external decision.
 
-**Workflow:** `hire_employee` — `t6 manager_approval`
+Workflows : hire_employee, sales_outreach
+
+Human approval gates are Executor checkpoints that pause execution and await an external decision.
+
+Supported gates:
+
+| Task | Action | Approver Role |
+|-------|--------|---------------|
+| t5 | hr_select_candidates | HR |
+| t7 | hr_offer_approval | HR |
+| t8 | manager_approval | MANAGER |
+| t6 | approve_outreach_campaign | MANAGER |
+
+### Output stored
+
+Each human task stores:
+
+```python
+state.outputs[task_id] = {
+    "approval_status": str,
+    "human_feedback": str | None,
+    "human_input_data": dict
+}
+```
 
 ### Behaviour
 
@@ -138,7 +162,7 @@ The human approval gate is **not an agent**. It is a Workflow Executor checkpoin
 | `state.awaiting_human_input` | `True` while pending      |
 | `state.approval_status` | `"approved"` or `"rejected"`  |
 | `state.status`          | `"failed"` if rejected         |
-| `state.human_feedback`  | Manager's approval/rejection comments |
+| `state.human_feedback` | Human approver comments for the most recently resolved approval gate |
 
 ### Decision rules
 
@@ -149,9 +173,22 @@ approval_status == "rejected"  →  set state.status = "failed", stop execution
 
 ### Output stored
 
+The Executor copies:
+
 ```python
-state.outputs["t6"] = {"approval_status": str}
+state.outputs[task_id]["approval_status"]
 ```
 
-The Executor copies `outputs["t6"]["approval_status"]` to `state.approval_status` before
-deciding whether to proceed to `t7 generate_hiring_summary`.
+to:
+
+```python
+state.approval_status
+```
+
+before deciding whether workflow execution should continue.
+
+The authoritative workflow approval state is:
+
+```python
+state.approval_status
+```
