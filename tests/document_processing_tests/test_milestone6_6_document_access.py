@@ -22,7 +22,7 @@ or a real LLM.
 from __future__ import annotations
 
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
@@ -303,3 +303,76 @@ def test_unknown_objective_has_no_document_resolution():
         "onboard_employee",
         SimpleNamespace(),
     ) == []
+
+def test_hire_employee_t5_approval_context_includes_resume_summaries(
+    monkeypatch,
+):
+    from backend.api import routes
+
+    state = SimpleNamespace(
+        objective_id="hire_employee",
+        status="paused",
+        awaiting_human_input=True,
+        current_task_id="t5",
+        outputs={
+            "t3": {
+                "shortlisted_candidates": [
+                    {
+                        "candidate_id": "cand_1",
+                        "name": "Alice",
+                    }
+                ]
+            }
+        },
+    )
+
+    expected_summaries = {
+        "cand_1": {
+            "document_id": "doc_1",
+            "ai_summary": "Strong backend candidate.",
+        }
+    }
+
+    helper = Mock(return_value=expected_summaries)
+
+    monkeypatch.setattr(
+        routes,
+        "build_shortlisted_resume_summaries",
+        helper,
+    )
+
+    result = routes.get_approval_context(state)
+
+    assert result["resume_summaries"] == expected_summaries
+
+    helper.assert_called_once_with(
+        state,
+        state.outputs["t3"]["shortlisted_candidates"],
+    )
+
+
+def test_resume_summaries_are_not_added_outside_hire_employee_t5(
+    monkeypatch,
+):
+    from backend.api import routes
+
+    state = SimpleNamespace(
+        objective_id="hire_employee",
+        status="paused",
+        awaiting_human_input=True,
+        current_task_id="t7",
+        outputs={},
+    )
+
+    helper = Mock()
+
+    monkeypatch.setattr(
+        routes,
+        "build_shortlisted_resume_summaries",
+        helper,
+    )
+
+    result = routes.get_approval_context(state)
+
+    assert "resume_summaries" not in result
+    helper.assert_not_called()    
