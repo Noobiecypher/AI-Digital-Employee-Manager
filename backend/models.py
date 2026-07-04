@@ -48,6 +48,13 @@ class PerformanceReportParams(BaseModel):
     metrics_to_include: list[str]
     report_type: str
 
+    # M6.6 — explicit workflow-source document selection.
+    # Routed deterministically: sales_document_ids -> t2 (collect_sales_metrics),
+    # hr_document_ids -> t1 (collect_hr_metrics). Both optional; empty lists
+    # preserve pre-M6.6 behavior exactly.
+    sales_document_ids: list[str] = Field(default_factory=list)
+    hr_document_ids: list[str] = Field(default_factory=list)
+
 
 class PerformanceReviewParams(BaseModel):
     employee_name: str
@@ -72,6 +79,11 @@ class MarketResearchParams(BaseModel):
     focus_areas: list[str]
     output_format: str
 
+    # M6.6 — optional explicit workflow-source document selection.
+    # Only documents of type 'market_research_report' are eligible.
+    # Empty list preserves pre-M6.6 behavior exactly.
+    document_ids: list[str] = Field(default_factory=list)
+
 # ==========================================================
 # SHARED WORKFLOW OUTPUT MODELS
 # ==========================================================
@@ -83,6 +95,12 @@ class Candidate(BaseModel):
     match_score: float = 0.0
     email: str = ""
     phone: str = ""
+
+    # M6.6 — stable business identity, preserved through the shortlist
+    # output so the executor can resolve trusted resume document links
+    # for shortlisted candidates only. "" when unavailable (mock/legacy
+    # candidate records without a candidate_id).
+    candidate_id: str = ""
 
 
 
@@ -283,6 +301,12 @@ class AgentState(BaseModel):
 
     # Completed task IDs
     completed_tasks: list[str] = Field(default_factory=list)
+
+    # M6.6 — trusted document ID references only (never text/bytes).
+    # Sole writer: Workflow Executor (initialize_state / post-task hooks).
+    # Agents access document content only via DataLoader -> DocumentContextService,
+    # which revalidates every ID here before releasing any content.
+    document_ids: list[str] = Field(default_factory=list)
 
     # Outputs produced by agents
     #

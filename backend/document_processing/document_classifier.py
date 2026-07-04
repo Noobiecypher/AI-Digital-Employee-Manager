@@ -5,7 +5,7 @@ Document identification for the Document Upload & AI Document Ingestion
 subsystem.
 
 DocumentClassifier answers exactly one question: "what type of document
-is this, and which business domain/entity does that type belong to?"
+is this, and what downstream configuration does that type resolve to?"
 It owns identification only — it does not route to a processor, does
 not extract data, and does not touch Mongo or repositories. It does
 call the shared LLM (via backend.agent_nodes.llm), but only to
@@ -18,16 +18,16 @@ Responsibilities
   _detect_document_type()).
 - Validate the detected document_type against document_registry.
 - Build and return a typed ClassificationResult, using document_registry
-  as the single source of truth for business_domain, target_business_entity,
-  and review_required.
+  as the single source of truth for business_domain, outcome,
+  target_business_entity, and review_required.
 
 Explicitly NOT this module's responsibility
 --------------------------------------------
 - Calling repositories or MongoDB.
 - Extracting structured data (BaseProcessor / domain processors).
 - Calling processors or performing any routing (processor_registry.py).
-- Asking the LLM for business_domain, target_business_entity, or
-  review_required — those come exclusively from document_registry.
+- Asking the LLM for business_domain, outcome, target_business_entity,
+  or review_required — those come exclusively from document_registry.
 - Importing business entities.
 
 Swappable internals, stable interface
@@ -84,24 +84,22 @@ class ClassificationError(Exception):
 # lives here, not in document_registry, because it is a classification
 # prompt detail (which labels the model is allowed to choose from),
 # not document configuration. document_registry remains the single
-# source of truth for business_domain, target_business_entity, and
-# review_required — the LLM is never asked for those.
+# source of truth for business_domain, outcome,
+# target_business_entity, and review_required — the LLM is never
+# asked for those.
 
 _SUPPORTED_DOCUMENT_TYPES: tuple[str, ...] = (
     "resume",
-    "employee_onboarding_form",
-    "sales_contract",
     "market_research_report",
     "performance_review",
-    "goal_sheet",
     "self_assessment",
     "manager_evaluation",
-    "kpi_report",
-    "executive_report",
-    "department_report",
     "sales_performance_report",
     "hr_metrics_report",
+    "product_information",
 )
+
+_UNSUPPORTED_DOCUMENT_TYPE = "unsupported"
 
 # Minimum confidence (0-100, as returned by the LLM) required to accept
 # a document_type. Below this threshold, the document is considered
@@ -142,9 +140,8 @@ class DocumentClassifier:
 
         Returns:
             A ClassificationResult with document_type, business_domain,
-            target_business_entity, and review_required resolved from
-            document_registry.
-
+            outcome, target_business_entity, and review_required resolved
+            from document_registry.
         Raises:
             ClassificationError: If no document_type can be confidently
                                   detected, or the detected document_type
@@ -164,6 +161,7 @@ class DocumentClassifier:
             document_id=metadata.document_id,
             document_type=config.document_type,
             business_domain=config.business_domain,
+            outcome=config.outcome,
             target_business_entity=config.target_business_entity,
             review_required=config.review_required,
             confidence=confidence,
@@ -215,12 +213,103 @@ Filename: {metadata.original_filename}
 Document Content:
 {excerpt}
 
-Supported document types (choose exactly one):
+Supported document types:
 {chr(10).join(f"- {t}" for t in _SUPPORTED_DOCUMENT_TYPES)}
+
+Supported document types and strict classification criteria:
+
+- resume
+  A candidate/job-application document describing a person's professional
+  background for recruitment purposes. It should contain clear resume-like
+  evidence such as work experience, education, skills, contact details,
+  professional summary, or a target/applied role.
+  Do NOT classify any of the following as a resume:
+- employee profiles or internal staff biographies;
+- company directory entries or team-member introductions;
+- generic biographies or narrative descriptions of a person;
+- performance-related descriptions of an existing employee.
+
+ A person having skills, experience, a job title, or employment history is not
+ enough to make the document a resume. The document must have a clear
+ recruitment, job-application, candidate-profile, or professional-CV purpose.
+
+- product_information
+  A document describing a specific commercial product or service that could
+  be stored as a product business entity. It should clearly identify the
+  offering and provide product-specific business information such as a
+  description, customer pain points, target industries/customers, category,
+  features, positioning, or pricing.
+  Do NOT classify any of the following as product_information:
+- recipes, cooking instructions, ingredients lists, food preparation guides,
+  or other instructional content;
+- general company brochures or company capability descriptions;
+- advertisements without a clearly identifiable commercial offering;
+- invoices or transaction documents;
+- generic descriptions of an organization.
+
+ A physical object, food item, topic, or described "thing" is not automatically
+ a product. The document must have a business purpose of describing a specific
+ commercial offering for customers, sales, marketing, or product management.
+
+- hr_metrics_report
+  A report containing organization-level HR or workforce metrics such as
+  employee count, performance ratings, goal completion, satisfaction,
+  attrition, training completion, or promotions.
+
+- sales_performance_report
+  A report containing sales performance metrics such as revenue, deals won,
+  pipeline value, win rate, outreach activity, demos, or related KPIs.
+
+- market_research_report
+  A research or analysis document containing substantive market findings,
+  competitor analysis, trends, customer insights, market overview, or
+  defined research focus areas.
+  Do NOT classify vague meeting notes or generic statements about growth,
+  competitors, or markets without substantive research findings or analysis.
+
+- performance_review
+  A formal employee performance review containing evaluation evidence such
+  as ratings, strengths, weaknesses, goals, or review-period assessment.
+
+- self_assessment
+  An employee's own first-person assessment of achievements, strengths,
+  growth areas, or performance during a review period.
+
+- manager_evaluation
+  A manager's evaluation of an employee containing manager feedback,
+  strengths, concerns, ratings, recommendations, or review evidence.
+
+If the document does not clearly satisfy the positive criteria for one
+supported type, classify it as:
+
+- unsupported
+
+Important rules:
+- Match the document's purpose, not isolated words or superficial similarity.
+- A person being described is not automatically a resume.
+- Something being described is not automatically product information.
+- Business-related text is not automatically a supported business document.
+- When required evidence for a supported type is absent, choose unsupported.
+- When genuinely uncertain between a supported type and unsupported, choose
+  unsupported.
+- Do not force unrelated, ambiguous, or insufficient content into the closest
+  supported type.
+- Before selecting product_information, verify that the document describes a
+ specific commercial offering intended for customers. If it is primarily
+ instructional content, such as a recipe or how-to guide, choose unsupported
+ even if it describes ingredients, components, features, or a named item.
+-Before selecting resume, verify that the document is actually intended to
+ represent a candidate or professional profile for recruitment or job
+ application purposes. If it merely describes an existing employee in
+ third-person narrative form, choose unsupported even if skills, experience,
+ or employment history are mentioned.
+
+Confidence means how certain you are that the document genuinely satisfies
+the full criteria for the selected type.
 
 Respond in exactly this format, with no extra text:
 
-Document Type: <document_type>
+Document Type: <supported_document_type_or_unsupported>
 Confidence: <0-100>
 """
 
@@ -242,6 +331,12 @@ Confidence: <0-100>
         document_type = document_type_match.group(1).strip().lower()
         confidence_raw = float(confidence_match.group(1))
         confidence = max(0.0, min(1.0, confidence_raw / 100))
+
+        if document_type == _UNSUPPORTED_DOCUMENT_TYPE:
+            raise ClassificationError(
+                document_id=metadata.document_id,
+                reason="Document does not match any supported document type.",
+            )
 
         if document_type not in _SUPPORTED_DOCUMENT_TYPES:
             raise ClassificationError(

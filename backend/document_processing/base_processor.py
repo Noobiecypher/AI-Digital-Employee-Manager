@@ -284,6 +284,7 @@ class BaseProcessor(ABC):
         metadata: DocumentMetadata,
         extracted_data: dict[str, Any],
         confidence: float | None = None,
+        ai_summary: str | None = None,
     ) -> ProcessingResult:
         """
         Construct a ProcessingResult with the boilerplate fields filled
@@ -309,4 +310,5 @@ class BaseProcessor(ABC):
             extracted_data=extracted_data,
             confidence=confidence,
             processed_at=datetime.now(timezone.utc).isoformat(),
+            ai_summary=ai_summary,
         )

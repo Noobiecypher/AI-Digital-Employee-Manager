@@ -31,6 +31,8 @@ MongoDB document schema
         "extracted_data":       dict,
         "confidence":           float | None,          # carried over from the
                                                         # originating ProcessingResult
+        "ai_summary":           str | None,            # carried over from the
+                                                        # originating ProcessingResult
         "status":               str,                   # DocumentStatus value
         "reviewed_by":          str | None,
         "review_notes":         str | None,
@@ -72,7 +74,9 @@ from pymongo.collection import Collection
 from pymongo.errors import PyMongoError
 
 from backend.database.mongo import get_import_drafts_collection
-from backend.document_processing.document_models import BusinessDomain, DocumentStatus
+from backend.document_processing.document_models import (
+    BusinessDomain, DraftOperation, DocumentStatus,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -157,6 +161,7 @@ class ImportDraftRepository:
 
         Optional keys in `data`:
             confidence           (float | None)          — default None
+            ai_summary           (str | None)             — default None
             source_document_ids  (list[str])              — default [document_id]
             status               (DocumentStatus | str)    — default PENDING_REVIEW
 
@@ -192,6 +197,9 @@ class ImportDraftRepository:
         now = datetime.now(timezone.utc)
         status = self._as_value(data.get("status", DocumentStatus.PENDING_REVIEW))
         business_domain = self._as_value(data["business_domain"])
+        operation = self._as_value(data.get("operation", DraftOperation.CREATE_ENTITY))
+        if operation == DraftOperation.ENTITY_IMPORT.value:
+            operation = DraftOperation.CREATE_ENTITY.value
 
         document = {
             "_id": draft_id,
@@ -199,8 +207,12 @@ class ImportDraftRepository:
             "source_document_ids": data.get("source_document_ids") or [document_id],
             "business_domain": business_domain,
             "target_business_entity": data["target_business_entity"],
+            "operation": operation,
+            "target_entity_key": data.get("target_entity_key"),
+            "target_context": dict(data.get("target_context") or {}),
             "extracted_data": data["extracted_data"],
             "confidence": data.get("confidence"),
+            "ai_summary": data.get("ai_summary"),
             "status": status,
             "reviewed_by": None,
             "review_notes": None,

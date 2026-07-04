@@ -17,6 +17,7 @@ these models rather than redefining them.
 
 Contents
 --------
+  Domain enums    : BusinessDomain, DocumentOutcome
   Lifecycle enums : DocumentStatus, ReviewDecision
   Metadata        : DocumentMetadata
   Classification  : ClassificationResult
@@ -49,6 +50,16 @@ class BusinessDomain(str, Enum):
     PERFORMANCE = "performance"
 
 
+class DocumentOutcome(str, Enum):
+    """
+    Defines how a successfully processed document is used downstream.
+    """
+
+    ENTITY_IMPORT = "entity_import"
+    ENTITY_EVIDENCE = "entity_evidence"
+    WORKFLOW_SOURCE = "workflow_source"
+
+
 # ==============================================================
 # LIFECYCLE ENUMS
 # ==============================================================
@@ -73,6 +84,15 @@ class DocumentStatus(str, Enum):
     REJECTED = "rejected"
     IMPORTED = "imported"
     FAILED = "failed"
+
+
+class DraftOperation(str, Enum):
+    """Human-review operation performed after approval."""
+
+    CREATE_ENTITY = "create_entity"
+    ENRICH_ENTITY = "enrich_entity"
+    ATTACH_EVIDENCE = "attach_evidence"
+    ENTITY_IMPORT = "entity_import"  # legacy alias; behaves as CREATE_ENTITY
 
 
 class ReviewDecision(str, Enum):
@@ -107,6 +127,9 @@ class DocumentMetadata(BaseModel):
     uploaded_at: str
     status: DocumentStatus
 
+    expected_document_type: str | None = None
+    target_context: dict[str, Any] = Field(default_factory=dict)
+
     # Populated after classification. Absent (None) beforehand.
     document_type: str | None = Field(
         default=None,
@@ -116,9 +139,17 @@ class DocumentMetadata(BaseModel):
         default=None,
         description="Business domain the document belongs to.",
     )
+    outcome: DocumentOutcome | None = Field(
+        default=None,
+        description="Downstream usage of the processed document.",
+    )
+
     target_business_entity: str | None = Field(
         default=None,
-        description="Business entity the extracted data is destined for, e.g. 'candidate'.",
+        description=(
+            "Business entity targeted by entity-import or entity-evidence "
+            "documents. None for workflow-source documents."
+        ),
     )
 
 
@@ -130,10 +161,11 @@ class ClassificationResult(BaseModel):
     """
     Typed output of the document classifier.
 
-    document_type / business_domain / target_business_entity /
-    review_required are expected to be looked up from the Document
-    Registry once a document_type has been determined — this model
-    just carries the resolved values, it doesn't resolve them itself.
+    document_type / business_domain / outcome /
+    target_business_entity / review_required are expected to be looked up
+    from the Document Registry once a document_type has been determined —
+    this model just carries the resolved values, it doesn't resolve them
+    itself.
     """
 
     model_config = ConfigDict(extra="ignore")
@@ -146,9 +178,16 @@ class ClassificationResult(BaseModel):
     business_domain: BusinessDomain = Field(
         description="Business domain associated with document_type.",
     )
-    target_business_entity: str = Field(
-        description="Business entity the extracted data is destined for.",
-        examples=["candidate"],
+    outcome: DocumentOutcome = Field(
+        description="Downstream usage of the processed document."
+    )
+
+    target_business_entity: str | None = Field(
+        default=None,
+        description=(
+            "Target business entity for entity-import or entity-evidence "
+            "documents. None for workflow-source documents."
+        ),
     )
     review_required: bool = Field(
         description="Whether a human must review extracted data before import."
@@ -203,6 +242,7 @@ class ProcessingResult(BaseModel):
     )
     ai_summary: str | None = None
 
+
 # ==============================================================
 # DRAFT
 # ==============================================================
@@ -222,6 +262,9 @@ class ImportDraft(BaseModel):
     document_id: str
     business_domain: BusinessDomain
     target_business_entity: str
+    operation: DraftOperation = DraftOperation.CREATE_ENTITY
+    target_entity_key: str | None = None
+    target_context: dict[str, Any] = Field(default_factory=dict)
     extracted_data: dict[str, Any] = Field(
         description="Extracted data awaiting review, as produced by a ProcessingResult."
     )
@@ -253,4 +296,8 @@ class ImportDraft(BaseModel):
         default=None,
         max_length=2000,
         description="Optional notes left by the reviewer.",
+    )
+    ai_summary: str | None = Field(
+        default=None,
+        description="AI-generated summary carried from the ProcessingResult.",
     )

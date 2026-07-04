@@ -44,6 +44,7 @@ Recommended indexes (run once during provisioning)
 ---------------------------------------------------
     db.documents.create_index("metadata.document_type")
     db.documents.create_index("metadata.status")
+    db.documents.create_index("metadata.outcome")
     db.documents.create_index("workflow_id")
     db.documents.create_index("metadata.uploaded_by")
     db.documents.create_index("created_at")
@@ -73,6 +74,7 @@ from backend.database.mongo import get_documents_collection
 from backend.document_processing.document_models import (
     ClassificationResult,
     DocumentMetadata,
+    DocumentOutcome,
     DocumentStatus,
     ProcessingResult,
 )
@@ -164,7 +166,7 @@ class DocumentRepository:
         Args:
             metadata: Fully populated DocumentMetadata describing the
                       uploaded file, as it exists immediately after
-                      upload (document_type / business_domain /
+                      upload (document_type / business_domain / outcome /
                       target_business_entity are typically still unset
                       at this point).
 
@@ -417,7 +419,7 @@ class DocumentRepository:
         """
         Store a classification result against a document.
 
-        Also syncs metadata.document_type / business_domain /
+        Also syncs metadata.document_type / business_domain / outcome /
         target_business_entity from the classification result, since
         DocumentMetadata documents those fields as "populated once
         DocumentClassifier has run" — this is a direct data copy, not
@@ -444,6 +446,7 @@ class DocumentRepository:
                         "classification": classification.model_dump(mode="json"),
                         "metadata.document_type": classification.document_type,
                         "metadata.business_domain": classification.business_domain.value,
+                        "metadata.outcome": classification.outcome.value,
                         "metadata.target_business_entity": (
                             classification.target_business_entity
                         ),
@@ -528,6 +531,36 @@ class DocumentRepository:
     # LIST / SEARCH
     # ==================================================================
 
+    def get_documents_by_ids(self, document_ids: list[str]) -> list[dict]:
+        """
+        Return documents matching any of the given document_ids.
+
+        M6.6 addition — bulk read used by DocumentContextService to build
+        lightweight contexts / revalidate several IDs in one round trip
+        instead of N sequential get_document() calls. Missing IDs are
+        silently omitted from the result (caller must check which IDs
+        came back, e.g. via {d["document_id"] for d in results}).
+
+        Args:
+            document_ids: Document IDs to fetch. Empty list returns [].
+
+        Returns:
+            List of document dicts (public shape, same as get_document()),
+            in no guaranteed order.
+
+        Raises:
+            RuntimeError: On any PyMongo failure.
+        """
+        if not document_ids:
+            return []
+
+        try:
+            cursor = self.collection.find({"_id": {"$in": list(document_ids)}})
+            return [self._serialize(doc) for doc in cursor]
+        except PyMongoError as exc:
+            logger.error("get_documents_by_ids failed: %s", exc)
+            raise RuntimeError(f"Failed to fetch documents by ids: {exc}") from exc
+
     def list_documents(
         self,
         limit: Optional[int] = None,
@@ -565,6 +598,7 @@ class DocumentRepository:
         uploaded_by: Optional[str] = None,
         created_after: Optional[datetime] = None,
         created_before: Optional[datetime] = None,
+        outcome: Optional[DocumentOutcome] = None,
         tags: Optional[list[str]] = None,
         limit: Optional[int] = None,
         skip: int = 0,
@@ -587,6 +621,7 @@ class DocumentRepository:
             uploaded_by:         Exact match on metadata.uploaded_by.
             created_after:       Inclusive lower bound on created_at.
             created_before:      Inclusive upper bound on created_at.
+            outcome:            Exact match on metadata.outcome.
             tags:                Documents carrying at least one of these tags.
             limit:               Optional maximum number of results.
             skip:                Number of results to skip (pagination).
@@ -605,6 +640,9 @@ class DocumentRepository:
             query["metadata.status"] = processing_status.value
         if workflow_id is not None:
             query["workflow_id"] = workflow_id
+        
+        if outcome is not None:
+            query["metadata.outcome"] = outcome.value
 
         uploader = uploaded_by or owner
         if uploader is not None:

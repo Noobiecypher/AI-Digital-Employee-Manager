@@ -265,6 +265,11 @@ No explanation. Just the skill list.
                 match_score      = match_score,
                 email            = raw.get("email", ""),
                 phone            = raw.get("phone", ""),
+                # M6.6 — preserve stable Candidate identity through the
+                # shortlist output so the executor can resolve trusted
+                # resume document links for shortlisted candidates only.
+                # "" for mock/legacy candidates with no candidate_id.
+                candidate_id     = raw.get("candidate_id", ""),
             )
 
             eligible.append(candidate.model_dump())

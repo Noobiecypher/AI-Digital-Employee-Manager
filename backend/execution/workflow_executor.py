@@ -58,6 +58,10 @@ from backend.planner.planner import run_planner
 from backend.execution.agent_router import get_agent
 from backend.agent_nodes.base_agent import AgentExecutionError
 from backend.database.workflow_repository import WorkflowRepository
+from backend.execution.workflow_document_resolution import (
+    resolve_initial_document_ids,
+    resolve_hire_employee_shortlist_documents,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -290,11 +294,25 @@ def initialize_state(planner_input: PlannerInput) -> AgentState:
     """
     planner_output, enriched_params = run_planner(planner_input)
 
+    # M6.6 — resolve initial document_ids BEFORE the first persist.
+    # Explicit-selection workflows (market_research, performance_report)
+    # raise here (DocumentAccessError subclasses) if any supplied ID is
+    # invalid — this fails workflow creation atomically, before any
+    # AgentState is persisted. Entity-linked workflows (sales_outreach,
+    # performance_review) never raise here; they silently resolve to
+    # whatever valid linked documents currently exist (possibly none).
+    # hire_employee/onboard_employee resolve to [] here by design — see
+    # resolve_initial_document_ids() docstring.
+    document_ids = resolve_initial_document_ids(
+        planner_output.objective_id, enriched_params
+    )
+
     return AgentState(
         workflow_id=planner_output.workflow_id,
         objective_id=planner_output.objective_id,
         params=enriched_params,
         tasks=planner_output.tasks,
+        document_ids=document_ids,
         # All remaining fields take defaults as documented above.
     )
 
@@ -502,6 +520,25 @@ def _execute_loop(state: AgentState) -> AgentState:
                 next_task.agent,
                 next_task.action,
             )
+
+            # ── M6.6 — Hire Employee post-t3 document resolution ──────
+            # Executor-owned checkpoint: only after shortlist_candidates
+            # completes do we know WHICH candidates are eligible for
+            # resume document access. Resolves only shortlisted (never
+            # rejected) candidates' trusted resume document IDs and
+            # appends them to state.document_ids, deduplicated preserving
+            # order. Persisted by the normal checkpoint ④ below — no
+            # extra persist call needed here.
+            if (
+                state.objective_id == "hire_employee"
+                and next_task.agent == "recruitment"
+                and next_task.action == "shortlist_candidates"
+            ):
+                shortlisted = result.get("shortlisted_candidates", [])
+                new_ids = resolve_hire_employee_shortlist_documents(shortlisted)
+                state.document_ids = list(
+                    dict.fromkeys([*state.document_ids, *new_ids])
+                )
 
         except AgentExecutionError as e:
             # Full failure context (task_id, agent, action, cause) is carried

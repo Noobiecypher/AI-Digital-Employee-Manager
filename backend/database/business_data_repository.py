@@ -278,6 +278,206 @@ class BusinessDataRepository:
         injection from leaking internal Mongo structure to callers.
         """
         return {k: v for k, v in document.items() if k != "_id"}
+    
+    def find_entity_by_source_import_draft_id(
+        self,
+        draft_id: str,
+    ) -> Optional[dict]:
+        """
+        Find the Candidate or Product materialized from one ImportDraft.
+
+        This is an exact internal provenance lookup used only for
+        import-operation idempotency. It is not business-level duplicate
+        detection.
+
+        Returns:
+            None if no entity exists for the draft.
+
+            Otherwise:
+            {
+                "target_business_entity": "candidate" | "product",
+                "entity": {...},
+            }
+
+        Raises:
+            RuntimeError: On MongoDB failure, or if the same draft ID
+                          has materialized more than one business entity.
+        """
+        try:
+            candidate = self.candidates.find_one(
+                {"source_import_draft_id": draft_id},
+                {"_id": 0},
+            )
+            product = self.products.find_one(
+                {"source_import_draft_id": draft_id},
+                {"_id": 0},
+            )
+        except PyMongoError as exc:
+            logger.error(
+                "Import provenance lookup failed for draft '%s': %s",
+                draft_id,
+                exc,
+            )
+            raise RuntimeError(
+                f"Failed to look up business entity for import draft "
+                f"'{draft_id}': {exc}"
+            ) from exc
+
+        if candidate is not None and product is not None:
+            raise RuntimeError(
+                f"Integrity/idempotency violation: import draft "
+                f"'{draft_id}' materialized both a Candidate and a Product"
+            )
+
+        if candidate is not None:
+            return {
+                "target_business_entity": "candidate",
+                "entity": candidate,
+            }
+
+        if product is not None:
+            return {
+                "target_business_entity": "product",
+                "entity": product,
+            }
+
+        return None   
+
+
+    def find_product_by_enrichment_draft_id(self, draft_id: str) -> Optional[dict]:
+        """Return the Product already enriched by this draft, if any."""
+        try:
+            return self.products.find_one(
+                {"source_enrichment_draft_ids": draft_id}, {"_id": 0}
+            )
+        except PyMongoError as exc:
+            raise RuntimeError(
+                f"Failed to check product enrichment provenance for '{draft_id}': {exc}"
+            ) from exc
+
+    def enrich_product_from_draft(
+        self,
+        product_name: str,
+        final_data: dict,
+        *,
+        draft_id: str,
+        document_id: str,
+    ) -> dict:
+        """Apply one reviewed Product final state exactly once."""
+        current = self.get_product(product_name)
+        if draft_id in current.get("source_enrichment_draft_ids", []):
+            return current
+        source_ids = list(dict.fromkeys([
+            *(current.get("source_document_ids") or []), document_id,
+        ]))
+        enrichment_ids = list(dict.fromkeys([
+            *(current.get("source_enrichment_draft_ids") or []), draft_id,
+        ]))
+        updates = {
+            **final_data,
+            "source_document_ids": source_ids,
+            "source_enrichment_draft_ids": enrichment_ids,
+        }
+        try:
+            result = self.products.update_one(
+                {
+                    **self._case_insensitive_filter("product_name", product_name),
+                    "source_enrichment_draft_ids": {"$ne": draft_id},
+                },
+                {"$set": updates},
+            )
+        except PyMongoError as exc:
+            raise RuntimeError(
+                f"Failed to enrich product '{product_name}': {exc}"
+            ) from exc
+        if result.matched_count == 0:
+            return self.get_product(product_name)
+        return self.get_product(product_name)
+
+    # ==================================================================
+    # M6.6 — ENTITY-LINKED DOCUMENT ID RESOLUTION (read-only)
+    # ==================================================================
+    #
+    # These three methods are the only entry points DocumentContextService
+    # uses to discover which document IDs are trusted for a given business
+    # entity. They do not validate documents themselves (existence, status,
+    # type) — that is DocumentContextService's job. They only answer
+    # "which document IDs does this business record currently claim?".
+
+    def get_product_source_document_ids(self, product_name: str) -> list[str]:
+        """
+        Return the Product's approved source_document_ids (order preserved,
+        as stored by enrich_product_from_draft). Empty list if the product
+        has no linked documents.
+
+        Raises:
+            ValueError: If no product with that name exists.
+        """
+        product = self.get_product(product_name)
+        return list(product.get("source_document_ids") or [])
+
+    def get_goal_evidence_document_ids(
+        self,
+        employee_name: str,
+        review_period: str,
+    ) -> list[str]:
+        """
+        Return document IDs of all approved evidence attached to the exact
+        Goal for employee_name + review_period (via document_evidence[]).
+        Empty list if no evidence has been attached.
+
+        Raises:
+            ValueError: If no goal exists for employee_name + review_period.
+        """
+        goal = self.get_goal(employee_name, review_period)
+        return [
+            e["document_id"]
+            for e in (goal.get("document_evidence") or [])
+            if e.get("document_id")
+        ]
+
+    def get_candidate_source_document_ids(self, candidate_id: str) -> list[str]:
+        """
+        Return the Candidate's linked source/resume document IDs, if any.
+
+        NOTE (M6.6 compatibility flag): the current candidate schema has no
+        'source_document_ids' field populated by any importer in this
+        codebase snapshot — only the future resume_filename/resume_url
+        slots and the import-idempotency 'source_import_draft_id'. This
+        method reads 'source_document_ids' defensively (returns [] if
+        absent) so it activates automatically, with zero further M6.6
+        changes, once the Business Import Service starts stamping that
+        field on candidate creation (Candidate is create-only per M6.5).
+
+        Raises:
+            ValueError: If no candidate with that id exists.
+        """
+        candidate = self.get_candidate(candidate_id)
+        return list(candidate.get("source_document_ids") or [])
+
+    def add_goal_document_evidence(
+        self,
+        employee_name: str,
+        review_period: str,
+        evidence: dict,
+    ) -> dict:
+        """Append one approved evidence snapshot, idempotent by document_id."""
+        self.get_goal(employee_name, review_period)
+        document_id = evidence["document_id"]
+        try:
+            self.goals.update_one(
+                {
+                    **self._goal_filter(employee_name, review_period),
+                    "document_evidence.document_id": {"$ne": document_id},
+                },
+                {"$push": {"document_evidence": evidence}},
+            )
+        except PyMongoError as exc:
+            raise RuntimeError(
+                f"Failed to attach document evidence to goals for "
+                f"'{employee_name}' ({review_period}): {exc}"
+            ) from exc
+        return self.get_goal(employee_name, review_period)
 
     # ==================================================================
     # EMPLOYEES
