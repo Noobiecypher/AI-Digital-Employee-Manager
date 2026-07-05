@@ -25,11 +25,11 @@ from typing import Optional
 
 from pydantic import ValidationError
 
-from backend.api.business_schemas import CandidateCreateRequest, ProductCreateRequest
 from backend.database.business_data_repository import BusinessDataRepository
 from backend.database.document_repository import DocumentRepository
 from backend.database.import_draft_repository import ImportDraftRepository
 from backend.document_processing.document_models import DraftOperation, DocumentStatus
+from backend.services.review_contract_service import resolve_contract, resolve_operation
 
 
 class BusinessImportError(Exception):
@@ -60,10 +60,9 @@ class BusinessImportService:
 
     @staticmethod
     def _operation(draft: dict) -> DraftOperation:
-        raw = draft.get("operation", DraftOperation.CREATE_ENTITY.value)
-        if raw == DraftOperation.ENTITY_IMPORT.value:
-            return DraftOperation.CREATE_ENTITY
-        return DraftOperation(raw)
+        return resolve_operation(
+            draft.get("operation", DraftOperation.CREATE_ENTITY.value)
+        )
 
     def _require_approved(self, draft: dict) -> None:
         status = DocumentStatus(draft["status"])
@@ -113,9 +112,8 @@ class BusinessImportService:
         except (ValueError, RuntimeError) as exc:
             raise BusinessImportError(draft_id, f"Target Product '{target}' not found: {exc}") from exc
         try:
-            final = ProductCreateRequest.model_validate(
-                draft["extracted_data"]
-            ).model_dump()
+            schema = resolve_contract("product", DraftOperation.ENRICH_ENTITY)
+            final = schema.model_validate(draft["extracted_data"]).model_dump()
             final["product_name"] = current["product_name"]
             entity = self._business_repo.enrich_product_from_draft(
                 current["product_name"], final, draft_id=draft_id, document_id=draft["document_id"])
@@ -153,11 +151,14 @@ class BusinessImportService:
             raise BusinessImportError(document_id, f"Failed to resolve evidence document type: {exc}") from exc
 
     def _validate_create(self, draft: dict) -> dict:
+        draft_id, target = draft["draft_id"], draft["target_business_entity"]
+        schema = resolve_contract(target, DraftOperation.CREATE_ENTITY)
+        if schema is None:
+            raise BusinessImportError(draft_id, f"Unsupported target business entity '{target}'.")
         try:
-            model = CandidateCreateRequest if draft["target_business_entity"] == "candidate" else ProductCreateRequest
-            return model.model_validate(draft["extracted_data"]).model_dump()
+            return schema.model_validate(draft["extracted_data"]).model_dump()
         except ValidationError as exc:
-            raise BusinessImportError(draft["draft_id"], f"Final reviewed business data is invalid: {exc}") from exc
+            raise BusinessImportError(draft_id, f"Final reviewed business data is invalid: {exc}") from exc
 
     def _complete_lifecycle(self, draft: dict, entity: dict, reused: bool) -> dict:
         draft_id, document_id = draft["draft_id"], draft["document_id"]

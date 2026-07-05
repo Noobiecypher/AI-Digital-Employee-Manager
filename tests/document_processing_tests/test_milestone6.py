@@ -387,9 +387,13 @@ class ReviewDraftRepo:
             "draft_id": "draft_1",
             "document_id": "doc_1",
             "status": status.value,
-            "extracted_data": {"name": "Alice"},
+            "target_business_entity": "candidate",
+            "operation": "create_entity",
+            "extracted_data": {
+                "name": "Alice",
+                "role_applied": "Engineer",
+            },
         }
-
     def get_import_draft(self, draft_id):
         return deepcopy(self.draft)
 

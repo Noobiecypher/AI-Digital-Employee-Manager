@@ -155,9 +155,13 @@ class RecruitmentProcessor(BaseProcessor):
             "name": extracted.name.strip(),
             "role_applied": extracted.role_applied,
             "skills": extracted.skills,
-            "experience_years": extracted.experience_years,
-            "email": extracted.email,
-            "phone": extracted.phone,
+            "experience_years": (
+                extracted.experience_years
+                if extracted.experience_years is not None
+                else 0
+            ),
+            "email": extracted.email or "",
+            "phone": extracted.phone or "",
         }
 
         confidence = calculate_field_completeness(

@@ -110,6 +110,57 @@ def test_recruitment_malformed_llm_output():
         with pytest.raises(OutputValidationError):
             recruitment_processor.RecruitmentProcessor().run("resume text", metadata)
 
+def test_recruitment_normalizes_missing_optional_business_fields():
+    metadata = _metadata("resume", BusinessDomain.RECRUITMENT)
+    payload = {
+        "name": "John Smith",
+        "role_applied": None,
+        "skills": [],
+        "experience_years": None,
+        "email": None,
+        "phone": None,
+        "summary": "Candidate profile.",
+    }
+
+    with patch.object(recruitment_processor, "llm") as mock_llm:
+        mock_llm.invoke.return_value = _fake_response(payload)
+        result = recruitment_processor.RecruitmentProcessor().run(
+            "resume text",
+            metadata,
+        )
+
+    assert result.extracted_data == {
+        "name": "John Smith",
+        "role_applied": None,
+        "skills": [],
+        "experience_years": 0,
+        "email": "",
+        "phone": "",
+    }
+
+
+def test_recruitment_preserves_extracted_optional_business_values():
+    metadata = _metadata("resume", BusinessDomain.RECRUITMENT)
+    payload = {
+        "name": "Jane Doe",
+        "role_applied": "Engineer",
+        "skills": ["Python"],
+        "experience_years": 5,
+        "email": "jane@example.com",
+        "phone": "+91 98765 43210",
+        "summary": "Experienced engineer.",
+    }
+
+    with patch.object(recruitment_processor, "llm") as mock_llm:
+        mock_llm.invoke.return_value = _fake_response(payload)
+        result = recruitment_processor.RecruitmentProcessor().run(
+            "resume text",
+            metadata,
+        )
+
+    assert result.extracted_data["experience_years"] == 5
+    assert result.extracted_data["email"] == "jane@example.com"
+    assert result.extracted_data["phone"] == "+91 98765 43210"
 
 # ---------------- HRProcessor ----------------
 

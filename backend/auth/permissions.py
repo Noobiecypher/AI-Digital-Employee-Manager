@@ -126,6 +126,14 @@ class Permission(str, Enum):
     USERS_CREATE = "users:create"
     USERS_UPDATE = "users:update"
 
+    # ---- documents (Document Upload & AI Document Ingestion subsystem) ---
+    DOCUMENTS_READ    = "documents:read"
+    DOCUMENTS_UPLOAD  = "documents:upload"
+    DOCUMENTS_PROCESS = "documents:process"
+    DOCUMENTS_REVIEW  = "documents:review"
+    DOCUMENTS_IMPORT  = "documents:import"
+    DOCUMENTS_DELETE  = "documents:delete"
+
 
 # ---------------------------------------------------------------------------
 # Role → permission mapping
@@ -160,6 +168,12 @@ ROLE_PERMISSIONS: dict[SystemRole, frozenset[Permission]] = {
         Permission.WORKFLOWS_APPROVE,
 
         Permission.ANALYTICS_READ,
+
+        Permission.DOCUMENTS_READ,
+        Permission.DOCUMENTS_UPLOAD,
+        Permission.DOCUMENTS_PROCESS,
+        Permission.DOCUMENTS_REVIEW,
+        Permission.DOCUMENTS_IMPORT,
     }),
 
     # HR: full candidate lifecycle (incl. delete); employee read/write;
@@ -184,6 +198,12 @@ ROLE_PERMISSIONS: dict[SystemRole, frozenset[Permission]] = {
         Permission.WORKFLOWS_READ,
         Permission.WORKFLOWS_CREATE,
         Permission.WORKFLOWS_APPROVE,
+
+        Permission.DOCUMENTS_READ,
+        Permission.DOCUMENTS_UPLOAD,
+        Permission.DOCUMENTS_PROCESS,
+        Permission.DOCUMENTS_REVIEW,
+        Permission.DOCUMENTS_IMPORT,
     }),
 
     # Employee: own profile read + contact-info update; own goals read.

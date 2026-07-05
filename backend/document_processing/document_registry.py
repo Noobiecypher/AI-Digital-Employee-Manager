@@ -101,6 +101,13 @@ class DocumentTypeConfig(BaseModel):
             "None for WORKFLOW_SOURCE."
         ),
     )
+    required_target_context_fields: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Target-context fields that must be supplied when uploading "
+            "this document type."
+        ),
+    )
     review_required: bool = Field(
         default=True,
         description=(
@@ -141,7 +148,8 @@ DOCUMENT_TYPE_REGISTRY: dict[str, DocumentTypeConfig] = {
         document_type="performance_review",
         business_domain=BusinessDomain.PERFORMANCE,
         outcome=DocumentOutcome.ENTITY_EVIDENCE,
-        target_business_entity="employee",
+        target_business_entity="goal",
+        required_target_context_fields=["employee_name", "review_period"],
         review_required=False,
         supported_formats=[FileFormat.PDF, FileFormat.DOCX],
     ),
@@ -150,7 +158,8 @@ DOCUMENT_TYPE_REGISTRY: dict[str, DocumentTypeConfig] = {
         document_type="self_assessment",
         business_domain=BusinessDomain.PERFORMANCE,
         outcome=DocumentOutcome.ENTITY_EVIDENCE,
-        target_business_entity="employee",
+        target_business_entity="goal",
+        required_target_context_fields=["employee_name", "review_period"],
         review_required=False,
         supported_formats=[FileFormat.PDF, FileFormat.DOCX],
     ),
@@ -159,7 +168,8 @@ DOCUMENT_TYPE_REGISTRY: dict[str, DocumentTypeConfig] = {
         document_type="manager_evaluation",
         business_domain=BusinessDomain.PERFORMANCE,
         outcome=DocumentOutcome.ENTITY_EVIDENCE,
-        target_business_entity="employee",
+        target_business_entity="goal",
+        required_target_context_fields=["employee_name", "review_period"],
         review_required=False,
         supported_formats=[FileFormat.PDF, FileFormat.DOCX],
     ),

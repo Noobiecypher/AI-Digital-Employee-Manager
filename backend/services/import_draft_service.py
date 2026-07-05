@@ -31,7 +31,15 @@ from backend.api.business_schemas import ProductCreateRequest
 from backend.database.business_data_repository import BusinessDataRepository
 from backend.database.document_repository import DocumentRepository
 from backend.database.import_draft_repository import ImportDraftRepository
-from backend.document_processing.document_models import DocumentStatus
+from backend.document_processing.document_models import (
+    DocumentStatus,
+    DraftOperation,
+)
+from backend.services.review_contract_service import (
+    format_validation_errors,
+    resolve_operation,
+    validate_reviewed_data,
+)
 
 
 class ImportDraftServiceError(Exception):
@@ -42,6 +50,27 @@ class ImportDraftServiceError(Exception):
         self.reason = reason
         super().__init__(
             f"Import draft service failed for '{draft_id}': {reason}"
+        )
+
+
+class DraftValidationError(Exception):
+    """
+    Raised when a draft's currently persisted extracted_data fails
+    validation against its resolved real business schema at approval
+    time.
+
+    Carries field-level errors (field/message/type) for the API layer to
+    surface as a structured 422. Raising this means no mutation has
+    occurred yet: the draft remains PENDING_REVIEW and the originating
+    document's status is untouched.
+    """
+
+    def __init__(self, draft_id: str, errors: list[dict]) -> None:
+        self.draft_id = draft_id
+        self.errors = errors
+        super().__init__(
+            f"Draft '{draft_id}' reviewed data failed business schema "
+            f"validation."
         )
 
 
@@ -292,6 +321,13 @@ class ImportDraftService:
                 ),
             )
 
+        # Rejection never runs business-data validation. Approval must be
+        # validated against the real resolved business schema before any
+        # draft or document mutation happens (defense in depth ahead of
+        # the final validation BusinessImportService performs at import).
+        if desired_status == DocumentStatus.APPROVED:
+            self._validate_reviewed_data_for_approval(draft)
+
         try:
             if desired_status == DocumentStatus.APPROVED:
                 draft = self._import_draft_repo.approve_import_draft(
@@ -315,6 +351,31 @@ class ImportDraftService:
             ) from exc
 
         return self._synchronize_document(draft, desired_status)
+
+    def _validate_reviewed_data_for_approval(self, draft: dict) -> None:
+        """
+        Validate the currently persisted extracted_data against the real
+        business schema resolved for this draft's (target_business_entity,
+        operation).
+
+        No-op when the resolved combination has no schema-based contract
+        (e.g. ATTACH_EVIDENCE evidence drafts) -- BusinessImportService
+        does not schema-validate those either, so approval-time behavior
+        stays consistent with final import-time behavior.
+        """
+        operation = resolve_operation(
+            draft.get("operation", DraftOperation.CREATE_ENTITY.value)
+        )
+        try:
+            validate_reviewed_data(
+                draft["target_business_entity"],
+                operation,
+                draft.get("extracted_data") or {},
+            )
+        except ValidationError as exc:
+            raise DraftValidationError(
+                draft["draft_id"], format_validation_errors(exc)
+            ) from exc
 
     def _synchronize_document(
         self,
