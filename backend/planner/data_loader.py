@@ -1,6 +1,7 @@
 import re
 
 from backend.models import (
+    AgentState,
     HireEmployeeParams,
     OnboardEmployeeParams,
     SalesOutreachParams,
@@ -14,6 +15,77 @@ from backend.database.mongo import (
     get_products_collection,
     get_candidates_collection,
 )
+
+from backend.services.document_context_service import DocumentContextService
+
+
+# ==========================================================
+# M6.6 — DOCUMENT ACCESS (agent/workflow-facing boundary)
+#
+# Agents never import DocumentRepository/DocumentStorage directly.
+# These thin functions are the ONLY document-access surface exposed to
+# agents; all eligibility/lifecycle policy is delegated to
+# DocumentContextService. No document Mongo access is added here.
+#
+# A module-level DocumentContextService instance is reused across calls
+# (cheap: it only holds lazily-resolved repository/storage handles) —
+# this is NOT a document content cache. No document content is preloaded
+# or cached here or in DocumentContextService.
+# ==========================================================
+
+_document_context_service = DocumentContextService()
+
+
+def get_selected_document_contexts(state: AgentState) -> list[dict]:
+    """
+    Return lightweight context (document_id, document_type, filename,
+    ai_summary, structured_data) for every document currently allowed
+    for this workflow (state.document_ids).
+    """
+    return _document_context_service.get_lightweight_contexts(
+        list(state.document_ids),
+        allowed_document_ids=state.document_ids,
+        workflow_id=state.workflow_id,
+    )
+
+
+def get_document_context(state: AgentState, document_id: str) -> dict:
+    """
+    Return lightweight context for one document, enforcing that
+    document_id belongs to state.document_ids.
+    """
+    return _document_context_service.get_lightweight_context(
+        document_id,
+        allowed_document_ids=state.document_ids,
+        workflow_id=state.workflow_id,
+    )
+
+
+def get_document_text(state: AgentState, document_id: str) -> str:
+    """
+    Return full extracted text for one document, enforcing that
+    document_id belongs to state.document_ids. Use only when lightweight
+    context (AI summary / structured data) is insufficient.
+    """
+    return _document_context_service.get_extracted_text(
+        document_id,
+        allowed_document_ids=state.document_ids,
+        workflow_id=state.workflow_id,
+    )
+
+
+def get_document_file(state: AgentState, document_id: str) -> bytes:
+    """
+    Return original file bytes for one document, enforcing that
+    document_id belongs to state.document_ids. Deepest, most exceptional
+    access level — for future specialized agents/tools only. Never store
+    the returned bytes on AgentState.
+    """
+    return _document_context_service.get_original_file(
+        document_id,
+        allowed_document_ids=state.document_ids,
+        workflow_id=state.workflow_id,
+    )
 
 
 # ==========================================================

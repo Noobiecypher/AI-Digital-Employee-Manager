@@ -17,49 +17,27 @@ Responsibilities
 
 Explicitly NOT this module's responsibility
 --------------------------------------------
-- Instantiating processors — DocumentService constructs the instance
-  once this registry has told it which class to use.
+- Instantiating processors. Processor instantiation belongs to the
+  future processing orchestration layer; this registry's
+  responsibility ends once it has resolved the processor class.
 - Performing extraction (BaseProcessor / domain processors).
 - Performing classification (document_classifier.py).
 - Any MongoDB access or business entity import.
+- Wiring processor output into workflow agents — that is a later,
+  separate Processor -> Agent integration milestone owned by other
+  developers. This registry's job ends at "which processor class."
 
-Milestone 2 state: intentionally empty routing table
+Current state (Milestone 5): routing table populated
 -------------------------------------------------------
-No domain processor classes (RecruitmentProcessor, HRProcessor,
-SalesProcessor, ResearchProcessor, PerformanceProcessor) exist yet —
-they are introduced in Milestone 3. Routing is explicitly owned by this
-file, the same way document metadata is explicitly owned by
-document_registry.py: there is no self-registration mechanism, no
-import-time side effects, and no processor module reaches into this
-registry on its own. Until Milestone 3, _PROCESSOR_REGISTRY is simply
-empty, and get_processor_class() raises a clear "not implemented yet"
-error for every domain.
+All five domain processors are implemented and wired in below as an
+explicit literal mapping, mirroring the style of
+document_registry.DOCUMENT_TYPE_REGISTRY. There is no self-registration
+mechanism, no import-time side effects beyond importing the five
+processor classes, and no processor module reaches into this registry
+on its own.
 
-Milestone 3 plan
------------------
-Once the concrete domain processors exist, _PROCESSOR_REGISTRY will be
-populated as an explicit literal mapping directly in this file —
-mirroring the style of document_registry.DOCUMENT_TYPE_REGISTRY:
-
-    from backend.document_processing.recruitment_processor import RecruitmentProcessor
-    from backend.document_processing.hr_processor import HRProcessor
-    from backend.document_processing.sales_processor import SalesProcessor
-    from backend.document_processing.research_processor import ResearchProcessor
-    from backend.document_processing.performance_processor import PerformanceProcessor
-
-    _PROCESSOR_REGISTRY: dict[BusinessDomain, type[BaseProcessor]] = {
-        BusinessDomain.RECRUITMENT: RecruitmentProcessor,
-        BusinessDomain.HR: HRProcessor,
-        BusinessDomain.SALES: SalesProcessor,
-        BusinessDomain.RESEARCH: ResearchProcessor,
-        BusinessDomain.PERFORMANCE: PerformanceProcessor,
-    }
-
-No registration function, no import-time wiring — the registry itself
-remains the single source of routing truth.
-
-Usage (by the future DocumentService)
-----------------------------------------
+Usage (by future processing orchestration)
+--------------------------------------------
     processor_class = get_processor_class(classification_result)
     processor = processor_class(...)
     result = processor.run(content, metadata)
@@ -72,25 +50,23 @@ from backend.document_processing.document_models import (
     BusinessDomain,
     ClassificationResult,
 )
+from backend.document_processing.hr_processor import HRProcessor
+from backend.document_processing.performance_processor import PerformanceProcessor
+from backend.document_processing.recruitment_processor import RecruitmentProcessor
+from backend.document_processing.research_processor import ResearchProcessor
+from backend.document_processing.sales_processor import SalesProcessor
 
 # ==============================================================
 # ROUTING TABLE
 # ==============================================================
-# Intentionally empty for Milestone 2. Populated as an explicit literal
-# mapping once concrete domain processors exist (see the Milestone 3
-# plan in the module docstring above).
 
-# Milestone 3
-#
-# _PROCESSOR_REGISTRY = {
-#     BusinessDomain.RECRUITMENT: RecruitmentProcessor,
-#     BusinessDomain.HR: HRProcessor,
-#     BusinessDomain.SALES: SalesProcessor,
-#     BusinessDomain.RESEARCH: ResearchProcessor,
-#     BusinessDomain.PERFORMANCE: PerformanceProcessor,
-# }
-
-_PROCESSOR_REGISTRY: dict[BusinessDomain, type[BaseProcessor]] = {}
+_PROCESSOR_REGISTRY: dict[BusinessDomain, type[BaseProcessor]] = {
+    BusinessDomain.RECRUITMENT: RecruitmentProcessor,
+    BusinessDomain.HR: HRProcessor,
+    BusinessDomain.SALES: SalesProcessor,
+    BusinessDomain.RESEARCH: ResearchProcessor,
+    BusinessDomain.PERFORMANCE: PerformanceProcessor,
+}
 
 
 # ==============================================================
@@ -110,11 +86,10 @@ def get_processor_class(classification: ClassificationResult) -> type[BaseProces
         classification.business_domain.
 
     Raises:
-        NotImplementedError: If no processor has been implemented yet
-                              for that business domain. This is the
-                              expected outcome for every domain until
-                              Milestone 3 adds concrete processors and
-                              populates _PROCESSOR_REGISTRY.
+        NotImplementedError: If no processor is registered for that
+                              business domain. With all five domains
+                              wired in above, this should not occur for
+                              any currently supported document type.
     """
     business_domain = classification.business_domain
     processor_class = _PROCESSOR_REGISTRY.get(business_domain)
@@ -122,8 +97,7 @@ def get_processor_class(classification: ClassificationResult) -> type[BaseProces
     if processor_class is None:
         raise NotImplementedError(
             f"No processor has been implemented yet for business domain "
-            f"'{business_domain.value}'. Domain processors are introduced "
-            f"in Milestone 3."
+            f"'{business_domain.value}'."
         )
 
     return processor_class

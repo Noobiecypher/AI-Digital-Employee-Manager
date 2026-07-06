@@ -17,7 +17,7 @@ import os
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-
+import logging; logger = logging.getLogger(__name__)
 from backend.agent_nodes.llm import llm
 
 
@@ -149,7 +149,7 @@ def send_followup_email(
         return True
 
     except Exception as e:
-        print(f"[email_followup] Failed to send '{stage}' email to {to_email}: {e}")
+        logger.error("Failed to send '%s' email to %s: %s", stage, to_email, e)
         return False
 
 

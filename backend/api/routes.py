@@ -19,6 +19,10 @@ from backend.auth.permissions import (
     Permission,
 )
 
+from backend.execution.workflow_document_resolution import (
+    build_shortlisted_resume_summaries,
+)
+
 from pydantic import ValidationError
 from backend.planner.workflow_definitions import WORKFLOWS
 from backend.api.schemas import TaskOutputItem
@@ -207,6 +211,24 @@ def get_approval_context(state) -> dict | None:
                 {}
             )
         )
+
+    if (
+        state.objective_id == "hire_employee"
+        and state.current_task_id == "t5"
+    ):
+        shortlisted_candidates = (
+            state.outputs
+            .get("t3", {})
+            .get("shortlisted_candidates", [])
+        )
+
+        resume_summaries = build_shortlisted_resume_summaries(
+            state,
+            shortlisted_candidates,
+        )
+
+        if resume_summaries:
+            approval_context["resume_summaries"] = resume_summaries
 
     return approval_context
 

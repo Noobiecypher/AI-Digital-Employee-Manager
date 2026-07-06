@@ -6,8 +6,9 @@ Single source of truth for supported document metadata.
 This module is PURE CONFIGURATION. It answers exactly one question:
 
     "Given a document_type, what business domain does it belong to,
-     what business entity does it eventually target, does it require
-     human review, and which file formats are accepted for it?"
+     how is its processed output used downstream, what business entity
+     does it target when applicable, does it require human review,
+     and which file formats are accepted for it?"
 
 It deliberately does NOT answer "which processor handles this document
 type?" — that mapping belongs to processor_registry.py (a later
@@ -18,8 +19,8 @@ or processing logic.
 
 Responsibilities
 -----------------
-- Define the closed vocabularies (BusinessDomain, FileFormat) used
-  elsewhere in the ingestion subsystem.
+- Use the shared BusinessDomain and DocumentOutcome vocabularies.
+- Define the FileFormat vocabulary used by document configuration.
 - Define DocumentTypeConfig, one immutable record per supported
   document type.
 - Expose DOCUMENT_TYPE_REGISTRY, the flat configuration table.
@@ -41,7 +42,10 @@ from __future__ import annotations
 
 from enum import Enum
 
-from backend.document_processing.document_models import BusinessDomain
+from backend.document_processing.document_models import (
+    BusinessDomain,
+    DocumentOutcome,
+)
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -49,9 +53,6 @@ from pydantic import BaseModel, ConfigDict, Field
 # ==============================================================
 # CLOSED VOCABULARIES
 # ==============================================================
-
-
-
 
 class FileFormat(str, Enum):
     """File formats the ingestion pipeline is able to accept for upload."""
@@ -89,19 +90,29 @@ class DocumentTypeConfig(BaseModel):
     business_domain: BusinessDomain = Field(
         description="Business domain this document type belongs to.",
     )
-    target_business_entity: str = Field(
+    outcome: DocumentOutcome = Field(
+        description="How processed output is used downstream.",
+    )
+
+    target_business_entity: str | None = Field(
+        default=None,
         description=(
-            "Business entity the extracted data is ultimately destined for, "
-            "e.g. 'candidate', 'employee', 'goal'. This is a descriptive "
-            "label only — it does not have to already exist as a Mongo "
-            "collection at registry-definition time."
+            "Target business entity for ENTITY_IMPORT and ENTITY_EVIDENCE. "
+            "None for WORKFLOW_SOURCE."
+        ),
+    )
+    required_target_context_fields: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Target-context fields that must be supplied when uploading "
+            "this document type."
         ),
     )
     review_required: bool = Field(
         default=True,
         description=(
-            "Whether extracted data from this document type must pass "
-            "through human review before BusinessImportService may import it."
+            "Whether the processed document requires human review "
+            "before its downstream use."
         ),
     )
     supported_formats: list[FileFormat] = Field(
@@ -115,119 +126,79 @@ class DocumentTypeConfig(BaseModel):
 
 DOCUMENT_TYPE_REGISTRY: dict[str, DocumentTypeConfig] = {
 
-    # ----------------------------------------------------------
-    # RECRUITMENT
-    # ----------------------------------------------------------
     "resume": DocumentTypeConfig(
         document_type="resume",
         business_domain=BusinessDomain.RECRUITMENT,
+        outcome=DocumentOutcome.ENTITY_IMPORT,
         target_business_entity="candidate",
         review_required=True,
         supported_formats=[FileFormat.PDF, FileFormat.DOC, FileFormat.DOCX],
     ),
 
-    # ----------------------------------------------------------
-    # HR
-    # ----------------------------------------------------------
-    "employee_onboarding_form": DocumentTypeConfig(
-        document_type="employee_onboarding_form",
-        business_domain=BusinessDomain.HR,
-        target_business_entity="employee",
-        review_required=True,
-        supported_formats=[FileFormat.PDF, FileFormat.DOCX],
-    ),
-
-    # ----------------------------------------------------------
-    # SALES
-    # ----------------------------------------------------------
-    "sales_contract": DocumentTypeConfig(
-        document_type="sales_contract",
+    "product_information": DocumentTypeConfig(
+        document_type="product_information",
         business_domain=BusinessDomain.SALES,
+        outcome=DocumentOutcome.ENTITY_IMPORT,
         target_business_entity="product",
         review_required=True,
-        supported_formats=[FileFormat.PDF, FileFormat.DOCX],
-    ),
-
-    # ----------------------------------------------------------
-    # RESEARCH
-    # ----------------------------------------------------------
-    "market_research_report": DocumentTypeConfig(
-        document_type="market_research_report",
-        business_domain=BusinessDomain.RESEARCH,
-        target_business_entity="research_finding",
-        review_required=False,
         supported_formats=[FileFormat.PDF, FileFormat.DOCX, FileFormat.TXT],
     ),
 
-    # ----------------------------------------------------------
-    # PERFORMANCE — employee performance
-    # ----------------------------------------------------------
     "performance_review": DocumentTypeConfig(
         document_type="performance_review",
         business_domain=BusinessDomain.PERFORMANCE,
-        target_business_entity="employee",
-        review_required=True,
-        supported_formats=[FileFormat.PDF, FileFormat.DOCX],
-    ),
-    "goal_sheet": DocumentTypeConfig(
-        document_type="goal_sheet",
-        business_domain=BusinessDomain.PERFORMANCE,
+        outcome=DocumentOutcome.ENTITY_EVIDENCE,
         target_business_entity="goal",
-        review_required=True,
-        supported_formats=[FileFormat.PDF, FileFormat.DOCX, FileFormat.XLSX],
-    ),
-    "self_assessment": DocumentTypeConfig(
-        document_type="self_assessment",
-        business_domain=BusinessDomain.PERFORMANCE,
-        target_business_entity="employee",
-        review_required=True,
-        supported_formats=[FileFormat.PDF, FileFormat.DOCX],
-    ),
-    "manager_evaluation": DocumentTypeConfig(
-        document_type="manager_evaluation",
-        business_domain=BusinessDomain.PERFORMANCE,
-        target_business_entity="employee",
-        review_required=True,
+        required_target_context_fields=["employee_name", "review_period"],
+        review_required=False,
         supported_formats=[FileFormat.PDF, FileFormat.DOCX],
     ),
 
-    # ----------------------------------------------------------
-    # PERFORMANCE — business performance
-    # ----------------------------------------------------------
-    "kpi_report": DocumentTypeConfig(
-        document_type="kpi_report",
+    "self_assessment": DocumentTypeConfig(
+        document_type="self_assessment",
         business_domain=BusinessDomain.PERFORMANCE,
-        target_business_entity="department",
-        review_required=False,
-        supported_formats=[FileFormat.PDF, FileFormat.XLSX, FileFormat.CSV],
-    ),
-    "executive_report": DocumentTypeConfig(
-        document_type="executive_report",
-        business_domain=BusinessDomain.PERFORMANCE,
-        target_business_entity="company",
+        outcome=DocumentOutcome.ENTITY_EVIDENCE,
+        target_business_entity="goal",
+        required_target_context_fields=["employee_name", "review_period"],
         review_required=False,
         supported_formats=[FileFormat.PDF, FileFormat.DOCX],
     ),
-    "department_report": DocumentTypeConfig(
-        document_type="department_report",
+
+    "manager_evaluation": DocumentTypeConfig(
+        document_type="manager_evaluation",
         business_domain=BusinessDomain.PERFORMANCE,
-        target_business_entity="department",
+        outcome=DocumentOutcome.ENTITY_EVIDENCE,
+        target_business_entity="goal",
+        required_target_context_fields=["employee_name", "review_period"],
         review_required=False,
-        supported_formats=[FileFormat.PDF, FileFormat.XLSX],
+        supported_formats=[FileFormat.PDF, FileFormat.DOCX],
     ),
-    "sales_performance_report": DocumentTypeConfig(
-        document_type="sales_performance_report",
-        business_domain=BusinessDomain.PERFORMANCE,
-        target_business_entity="department",
-        review_required=False,
-        supported_formats=[FileFormat.PDF, FileFormat.XLSX, FileFormat.CSV],
-    ),
+
     "hr_metrics_report": DocumentTypeConfig(
         document_type="hr_metrics_report",
-        business_domain=BusinessDomain.PERFORMANCE,
-        target_business_entity="department",
+        business_domain=BusinessDomain.HR,
+        outcome=DocumentOutcome.WORKFLOW_SOURCE,
+        target_business_entity=None,
         review_required=False,
         supported_formats=[FileFormat.PDF, FileFormat.XLSX, FileFormat.CSV],
+    ),
+
+    "sales_performance_report": DocumentTypeConfig(
+        document_type="sales_performance_report",
+        business_domain=BusinessDomain.SALES,
+        outcome=DocumentOutcome.WORKFLOW_SOURCE,
+        target_business_entity=None,
+        review_required=False,
+        supported_formats=[FileFormat.PDF, FileFormat.XLSX, FileFormat.CSV],
+    ),
+
+    "market_research_report": DocumentTypeConfig(
+        document_type="market_research_report",
+        business_domain=BusinessDomain.RESEARCH,
+        outcome=DocumentOutcome.WORKFLOW_SOURCE,
+        target_business_entity=None,
+        review_required=False,
+        supported_formats=[FileFormat.PDF, FileFormat.DOCX, FileFormat.TXT],
     ),
 }
 

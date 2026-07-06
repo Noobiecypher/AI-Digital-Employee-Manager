@@ -265,6 +265,11 @@ No explanation. Just the skill list.
                 match_score      = match_score,
                 email            = raw.get("email", ""),
                 phone            = raw.get("phone", ""),
+                # M6.6 — preserve stable Candidate identity through the
+                # shortlist output so the executor can resolve trusted
+                # resume document links for shortlisted candidates only.
+                # "" for mock/legacy candidates with no candidate_id.
+                candidate_id     = raw.get("candidate_id", ""),
             )
 
             eligible.append(candidate.model_dump())
@@ -278,12 +283,16 @@ No explanation. Just the skill list.
 
         # Follow-up emails — only sends if email present and SMTP configured.
         # Silently skips otherwise (see email_followup.py docstring).
+        notification_results = {}
         if shortlisted:
-            notify_candidates(shortlisted, FollowUpStage.SHORTLISTED, role=params.role)
+            notification_results["shortlisted"] = notify_candidates(shortlisted, FollowUpStage.SHORTLISTED, role=params.role)
         if rejected_candidates:
-            notify_candidates(rejected_candidates, FollowUpStage.REJECTED, role=params.role)
+            notification_results["rejected"] = notify_candidates(rejected_candidates, FollowUpStage.REJECTED, role=params.role)
 
-        return {"shortlisted_candidates": shortlisted}
+        return {
+            "shortlisted_candidates": shortlisted,
+            "notification_results": notification_results,
+        }
 
     def _parse_resumes(self, resume_files: list[str], role: str) -> list[dict]:
         """

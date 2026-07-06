@@ -44,6 +44,7 @@ Recommended indexes (run once during provisioning)
 ---------------------------------------------------
     db.documents.create_index("metadata.document_type")
     db.documents.create_index("metadata.status")
+    db.documents.create_index("metadata.outcome")
     db.documents.create_index("workflow_id")
     db.documents.create_index("metadata.uploaded_by")
     db.documents.create_index("created_at")
@@ -71,8 +72,10 @@ from pymongo.errors import PyMongoError
 
 from backend.database.mongo import get_documents_collection
 from backend.document_processing.document_models import (
+    BusinessDomain,
     ClassificationResult,
     DocumentMetadata,
+    DocumentOutcome,
     DocumentStatus,
     ProcessingResult,
 )
@@ -164,7 +167,7 @@ class DocumentRepository:
         Args:
             metadata: Fully populated DocumentMetadata describing the
                       uploaded file, as it exists immediately after
-                      upload (document_type / business_domain /
+                      upload (document_type / business_domain / outcome /
                       target_business_entity are typically still unset
                       at this point).
 
@@ -417,7 +420,7 @@ class DocumentRepository:
         """
         Store a classification result against a document.
 
-        Also syncs metadata.document_type / business_domain /
+        Also syncs metadata.document_type / business_domain / outcome /
         target_business_entity from the classification result, since
         DocumentMetadata documents those fields as "populated once
         DocumentClassifier has run" — this is a direct data copy, not
@@ -444,6 +447,7 @@ class DocumentRepository:
                         "classification": classification.model_dump(mode="json"),
                         "metadata.document_type": classification.document_type,
                         "metadata.business_domain": classification.business_domain.value,
+                        "metadata.outcome": classification.outcome.value,
                         "metadata.target_business_entity": (
                             classification.target_business_entity
                         ),
@@ -528,6 +532,36 @@ class DocumentRepository:
     # LIST / SEARCH
     # ==================================================================
 
+    def get_documents_by_ids(self, document_ids: list[str]) -> list[dict]:
+        """
+        Return documents matching any of the given document_ids.
+
+        M6.6 addition — bulk read used by DocumentContextService to build
+        lightweight contexts / revalidate several IDs in one round trip
+        instead of N sequential get_document() calls. Missing IDs are
+        silently omitted from the result (caller must check which IDs
+        came back, e.g. via {d["document_id"] for d in results}).
+
+        Args:
+            document_ids: Document IDs to fetch. Empty list returns [].
+
+        Returns:
+            List of document dicts (public shape, same as get_document()),
+            in no guaranteed order.
+
+        Raises:
+            RuntimeError: On any PyMongo failure.
+        """
+        if not document_ids:
+            return []
+
+        try:
+            cursor = self.collection.find({"_id": {"$in": list(document_ids)}})
+            return [self._serialize(doc) for doc in cursor]
+        except PyMongoError as exc:
+            logger.error("get_documents_by_ids failed: %s", exc)
+            raise RuntimeError(f"Failed to fetch documents by ids: {exc}") from exc
+
     def list_documents(
         self,
         limit: Optional[int] = None,
@@ -555,6 +589,60 @@ class DocumentRepository:
             logger.error("list_documents failed: %s", exc)
             raise RuntimeError(f"Failed to list documents: {exc}") from exc
 
+    @staticmethod
+    def _build_search_query(
+        *,
+        document_type: Optional[str] = None,
+        processing_status: Optional[DocumentStatus] = None,
+        owner: Optional[str] = None,
+        workflow_id: Optional[str] = None,
+        uploaded_by: Optional[str] = None,
+        created_after: Optional[datetime] = None,
+        created_before: Optional[datetime] = None,
+        outcome: Optional[DocumentOutcome] = None,
+        business_domain: Optional[BusinessDomain] = None,
+        tags: Optional[list[str]] = None,
+    ) -> dict[str, Any]:
+        """
+        Build the shared PyMongo filter used by both search_documents()
+        and count_documents(), so the two never drift out of sync.
+
+        business_domain is an M7 addition (GET /documents needs it as a
+        list filter); it follows the exact same "exact match on a
+        metadata.* field" pattern as document_type/outcome above.
+        """
+        query: dict[str, Any] = {}
+
+        if document_type is not None:
+            query["metadata.document_type"] = document_type
+        if processing_status is not None:
+            query["metadata.status"] = processing_status.value
+        if workflow_id is not None:
+            query["workflow_id"] = workflow_id
+
+        if outcome is not None:
+            query["metadata.outcome"] = outcome.value
+
+        if business_domain is not None:
+            query["metadata.business_domain"] = business_domain.value
+
+        uploader = uploaded_by or owner
+        if uploader is not None:
+            query["metadata.uploaded_by"] = uploader
+
+        if created_after is not None or created_before is not None:
+            date_filter: dict[str, datetime] = {}
+            if created_after is not None:
+                date_filter["$gte"] = created_after
+            if created_before is not None:
+                date_filter["$lte"] = created_before
+            query["created_at"] = date_filter
+
+        if tags:
+            query["tags"] = {"$in": tags}
+
+        return query
+
     def search_documents(
         self,
         *,
@@ -565,6 +653,8 @@ class DocumentRepository:
         uploaded_by: Optional[str] = None,
         created_after: Optional[datetime] = None,
         created_before: Optional[datetime] = None,
+        outcome: Optional[DocumentOutcome] = None,
+        business_domain: Optional[BusinessDomain] = None,
         tags: Optional[list[str]] = None,
         limit: Optional[int] = None,
         skip: int = 0,
@@ -587,6 +677,8 @@ class DocumentRepository:
             uploaded_by:         Exact match on metadata.uploaded_by.
             created_after:       Inclusive lower bound on created_at.
             created_before:      Inclusive upper bound on created_at.
+            outcome:            Exact match on metadata.outcome.
+            business_domain:    Exact match on metadata.business_domain.
             tags:                Documents carrying at least one of these tags.
             limit:               Optional maximum number of results.
             skip:                Number of results to skip (pagination).
@@ -597,29 +689,18 @@ class DocumentRepository:
         Raises:
             RuntimeError: On any PyMongo failure.
         """
-        query: dict[str, Any] = {}
-
-        if document_type is not None:
-            query["metadata.document_type"] = document_type
-        if processing_status is not None:
-            query["metadata.status"] = processing_status.value
-        if workflow_id is not None:
-            query["workflow_id"] = workflow_id
-
-        uploader = uploaded_by or owner
-        if uploader is not None:
-            query["metadata.uploaded_by"] = uploader
-
-        if created_after is not None or created_before is not None:
-            date_filter: dict[str, datetime] = {}
-            if created_after is not None:
-                date_filter["$gte"] = created_after
-            if created_before is not None:
-                date_filter["$lte"] = created_before
-            query["created_at"] = date_filter
-
-        if tags:
-            query["tags"] = {"$in": tags}
+        query = self._build_search_query(
+            document_type=document_type,
+            processing_status=processing_status,
+            owner=owner,
+            workflow_id=workflow_id,
+            uploaded_by=uploaded_by,
+            created_after=created_after,
+            created_before=created_before,
+            outcome=outcome,
+            business_domain=business_domain,
+            tags=tags,
+        )
 
         try:
             cursor = self.collection.find(
@@ -633,6 +714,49 @@ class DocumentRepository:
         except PyMongoError as exc:
             logger.error("search_documents failed: %s", exc)
             raise RuntimeError(f"Failed to search documents: {exc}") from exc
+
+    def count_documents(
+        self,
+        *,
+        document_type: Optional[str] = None,
+        processing_status: Optional[DocumentStatus] = None,
+        owner: Optional[str] = None,
+        workflow_id: Optional[str] = None,
+        uploaded_by: Optional[str] = None,
+        created_after: Optional[datetime] = None,
+        created_before: Optional[datetime] = None,
+        outcome: Optional[DocumentOutcome] = None,
+        business_domain: Optional[BusinessDomain] = None,
+        tags: Optional[list[str]] = None,
+    ) -> int:
+        """
+        Return the count of documents matching the same filters as
+        search_documents(), without fetching or materializing them.
+
+        M7 addition: lets GET /documents report an accurate `total`
+        across the whole filtered set while `items` only returns one
+        page — without the route loading every matching record itself.
+
+        Raises:
+            RuntimeError: On any PyMongo failure.
+        """
+        query = self._build_search_query(
+            document_type=document_type,
+            processing_status=processing_status,
+            owner=owner,
+            workflow_id=workflow_id,
+            uploaded_by=uploaded_by,
+            created_after=created_after,
+            created_before=created_before,
+            outcome=outcome,
+            business_domain=business_domain,
+            tags=tags,
+        )
+        try:
+            return self.collection.count_documents(query)
+        except PyMongoError as exc:
+            logger.error("count_documents failed: %s", exc)
+            raise RuntimeError(f"Failed to count documents: {exc}") from exc
 
     # ==================================================================
     # DELETE

@@ -73,6 +73,7 @@ from backend.document_processing.document_models import (
     DocumentMetadata,
     DocumentStatus,
 )
+from backend.document_processing.document_registry import get_document_type_config
 from backend.services.document_storage import (
     DocumentStorage,
     DocumentStorageError,
@@ -167,6 +168,8 @@ class DocumentService:
         original_filename: str,
         content_type: str,
         uploaded_by: str,
+        expected_document_type: str | None = None,
+        target_context: dict | None = None,
     ) -> dict:
         """
         Run the full upload -> persist -> classify pipeline for one file.
@@ -190,6 +193,12 @@ class DocumentService:
                                    classifier exception is chained via
                                    `__cause__`.
         """
+        if expected_document_type is not None:
+            try:
+                get_document_type_config(expected_document_type)
+            except ValueError as exc:
+                raise DocumentServiceError(None, f"Unsupported expected document type '{expected_document_type}': {exc}") from exc
+
         # ------------------------------------------------------------
         # Step 1 — physical storage
         # ------------------------------------------------------------
@@ -214,6 +223,8 @@ class DocumentService:
             uploaded_by=uploaded_by,
             uploaded_at=datetime.now(timezone.utc).isoformat(),
             status=DocumentStatus.UPLOADED,
+            expected_document_type=expected_document_type,
+            target_context=dict(target_context or {}),
         )
 
         # ------------------------------------------------------------
@@ -272,7 +283,7 @@ class DocumentService:
             ) from exc
 
         # ------------------------------------------------------------
-        # Step 6 — persist classification result
+        # Step 6 — persist independent AI classification result
         # ------------------------------------------------------------
         try:
             self._repository.update_classification(document_id, classification)
@@ -282,6 +293,21 @@ class DocumentService:
                 document_id=document_id,
                 reason=f"Failed to persist classification: {exc}",
             ) from exc
+
+        # Compare only after the AI result is durable so a mismatch remains
+        # fully auditable: the user declaration lives in metadata and the
+        # independently detected type lives in classification.
+        if (
+            expected_document_type is not None
+            and classification.document_type != expected_document_type
+        ):
+            reason = (
+                "Declared document type mismatch: "
+                f"expected '{expected_document_type}', "
+                f"actual '{classification.document_type}'."
+            )
+            self._mark_failed(document_id, reason)
+            raise DocumentServiceError(document_id, reason)
 
         # ------------------------------------------------------------
         # Step 7 — advance lifecycle status to CLASSIFIED
