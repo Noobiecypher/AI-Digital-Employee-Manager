@@ -60,22 +60,18 @@ class WorkflowRepository:
 
     Methods
     -------
-    save(state)              — upsert AgentState by workflow_id
-    load(workflow_id)        — load AgentState; raises KeyError if missing
-    list_ids()               — return all workflow_ids in insertion order
-    get_timestamps(wf_id)    — return created_at / updated_at as ISO strings
+    save(state)                  — upsert AgentState by workflow_id
+    load(workflow_id)            — load AgentState; raises KeyError if missing
+    list_ids()                   — return all workflow_ids in insertion order
+    get_timestamps(wf_id)        — return created_at / updated_at as ISO strings
+    list_workflow_states()       — return AgentState list (no timestamps)
+    list_workflow_states_with_timestamps() — return (AgentState, created_at) pairs
     """
 
     def __init__(
         self,
         collection: Optional[Collection] = None,
     ) -> None:
-        """
-        Args:
-            collection: Optional pymongo Collection. If omitted, resolved
-                        lazily on first access via get_workflows_collection().
-                        Pass an explicit collection in unit tests.
-        """
         self._collection: Optional[Collection] = collection
 
     @property
@@ -96,18 +92,6 @@ class WorkflowRepository:
         $setOnInsert ensures created_at is written exactly once — on the
         first INSERT — and never overwritten by subsequent updates.
         updated_at and state are replaced on every call.
-
-        This method is called at every executor checkpoint (§12.3), so it
-        must be fast and must not raise on transient errors in a way that
-        corrupts the caller's control flow. PyMongoError is wrapped in a
-        RuntimeError so the executor's except-Exception handler catches it
-        and transitions the workflow to "failed" with a clear message.
-
-        Args:
-            state: The current AgentState to persist.
-
-        Raises:
-            RuntimeError: On any PyMongo write failure.
         """
         now: datetime = datetime.now(timezone.utc)
 
@@ -150,30 +134,11 @@ class WorkflowRepository:
     def load(self, workflow_id: str) -> AgentState:
         """
         Load AgentState from MongoDB by workflow_id.
-
-        AgentState.model_validate() is used (not AgentState(**doc["state"]))
-        so that Pydantic v2's smart-union correctly reconstructs the params
-        Union field from the serialised dict, as documented in the executor.
-
-        Args:
-            workflow_id: The "wf_<uuid4>" identifier to look up.
-
-        Returns:
-            Fully reconstructed AgentState.
-
-        Raises:
-            KeyError: If no document exists for workflow_id.
-                      The executor catches this and raises WorkflowNotFoundError.
-            RuntimeError: On any PyMongo read failure.
         """
         try:
             doc = self.collection.find_one({"_id": workflow_id})
         except PyMongoError as exc:
-            logger.error(
-                "[%s] Failed to load state: %s",
-                workflow_id,
-                exc,
-            )
+            logger.error("[%s] Failed to load state: %s", workflow_id, exc)
             raise RuntimeError(
                 f"Failed to load workflow '{workflow_id}': {exc}"
             ) from exc
@@ -186,18 +151,6 @@ class WorkflowRepository:
     def list_ids(self) -> list[str]:
         """
         Return all workflow_ids in the collection, ordered by created_at.
-
-        Fetches only the _id field — no state payloads are transferred.
-        For MVP the full list is returned; the API layer paginates in Python.
-
-        Post-MVP: push limit/offset into this query once the list route
-        grows beyond O(100) active workflows.
-
-        Returns:
-            List of workflow_id strings, ascending by creation time.
-
-        Raises:
-            RuntimeError: On any PyMongo read failure.
         """
         try:
             cursor = self.collection.find(
@@ -208,60 +161,54 @@ class WorkflowRepository:
             return [doc["_id"] for doc in cursor]
         except PyMongoError as exc:
             logger.error("Failed to list workflow IDs: %s", exc)
-            raise RuntimeError(
-                f"Failed to list workflow IDs: {exc}"
-            ) from exc
-    
-    def list_workflow_states(self,) -> list[AgentState]:
+            raise RuntimeError(f"Failed to list workflow IDs: {exc}") from exc
 
+    def list_workflow_states(self) -> list[AgentState]:
+        """
+        Return all AgentState objects ordered by created_at.
+        Used by analytics_service for status counts.
+        """
         try:
             cursor = self.collection.find(
                 {},
                 {"state": 1, "_id": 0},
-                sort=[("created_at", 1)]
+                sort=[("created_at", 1)],
             )
-
-            return [
-                AgentState.model_validate(
-                    doc["state"]
-                )
-                for doc in cursor
-            ]
-
+            return [AgentState.model_validate(doc["state"]) for doc in cursor]
         except PyMongoError as exc:
-            logger.error(
-                "Failed to fetch workflow states: %s",
-                exc,
+            logger.error("Failed to fetch workflow states: %s", exc)
+            raise RuntimeError(f"Failed to fetch workflow states: {exc}") from exc
+
+    def list_workflow_states_with_timestamps(self) -> list[tuple[AgentState, datetime | None]]:
+        """
+        Return (AgentState, created_at) pairs ordered by created_at.
+        Used by analytics_service to build chart data with real dates.
+
+        Returns:
+            List of (AgentState, created_at datetime in UTC) tuples.
+            created_at is None if the field is missing on older documents.
+        """
+        try:
+            cursor = self.collection.find(
+                {},
+                {"state": 1, "created_at": 1, "_id": 0},
+                sort=[("created_at", 1)],
             )
-
+            result = []
+            for doc in cursor:
+                state = AgentState.model_validate(doc["state"])
+                created_at = doc.get("created_at")  # datetime or None
+                result.append((state, created_at))
+            return result
+        except PyMongoError as exc:
+            logger.error("Failed to fetch workflow states with timestamps: %s", exc)
             raise RuntimeError(
-                f"Failed to fetch workflow states: {exc}"
+                f"Failed to fetch workflow states with timestamps: {exc}"
             ) from exc
-
 
     def get_timestamps(self, workflow_id: str) -> dict[str, str | None]:
         """
         Return ISO-formatted created_at and updated_at for a workflow.
-
-        Fetches only the two timestamp fields — no state payload is loaded.
-        Intended for the API layer to populate WorkflowResponse.created_at
-        and WorkflowResponse.updated_at without coupling the API to raw
-        MongoDB documents.
-
-        Timestamps are formatted as "YYYY-MM-DDTHH:MM:SSZ" to match the
-        existing _now() format used in routes.py, making migration from
-        the in-memory _metadata dict a drop-in replacement.
-
-        Args:
-            workflow_id: The "wf_<uuid4>" identifier.
-
-        Returns:
-            Dict with keys 'created_at' and 'updated_at'.
-            Values are ISO 8601 UTC strings or None if the workflow
-            document does not exist.
-
-        Raises:
-            RuntimeError: On any PyMongo read failure.
         """
         try:
             doc = self.collection.find_one(
@@ -269,11 +216,7 @@ class WorkflowRepository:
                 {"created_at": 1, "updated_at": 1, "_id": 0},
             )
         except PyMongoError as exc:
-            logger.error(
-                "[%s] Failed to fetch timestamps: %s",
-                workflow_id,
-                exc,
-            )
+            logger.error("[%s] Failed to fetch timestamps: %s", workflow_id, exc)
             raise RuntimeError(
                 f"Failed to get timestamps for workflow '{workflow_id}': {exc}"
             ) from exc

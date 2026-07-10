@@ -69,14 +69,17 @@ export const ROLE_PERMISSIONS = {
   admin: [
     '/dashboard', '/notifications', '/employees', '/candidates', '/jobs',
     '/products', '/goals', '/roles', '/workflows', '/approvals', '/reporting',
+    '/documents',
   ],
   manager: [
     '/dashboard', '/notifications', '/candidates', '/jobs',
     '/products', '/goals', '/workflows', '/approvals', '/reporting',
+    '/documents',
   ],
   hr: [
     '/dashboard', '/notifications', '/employees', '/candidates', '/jobs',
     '/goals', '/workflows', '/approvals', '/reporting',
+    '/documents',
   ],
   employee: [
     '/dashboard', '/notifications', '/goals',

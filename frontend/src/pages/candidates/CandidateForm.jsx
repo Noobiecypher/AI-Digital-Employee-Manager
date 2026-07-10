@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { candidatesApi } from '../../api/candidates'
 import { useToast } from '../../components/layout/AppLayout'
-import { FormCard, Field, Input, Textarea, FormActions } from '../_shared/FormComponents'
+import { FormCard, Field, Input, FormActions } from '../_shared/FormComponents'
 
 export default function CandidateForm() {
   const { id } = useParams()
@@ -12,7 +12,7 @@ export default function CandidateForm() {
 
   const [form, setForm] = useState({
     name: '', role_applied: '', email: '', phone: '',
-    experience_years: '', skills: '', match_score: '',
+    experience_years: '', skills: '',
   })
   const [loading, setLoading] = useState(false)
   const [fetching, setFetching] = useState(isEdit)
@@ -20,7 +20,14 @@ export default function CandidateForm() {
   useEffect(() => {
     if (!isEdit) return
     candidatesApi.getOne(id)
-      .then(data => setForm({ ...data, skills: (data.skills || []).join(', ') }))
+      .then(data => setForm({
+        name: data.name || '',
+        role_applied: data.role_applied || '',
+        email: data.email || '',
+        phone: data.phone || '',
+        experience_years: data.experience_years || '',
+        skills: (data.skills || []).join(', '),
+      }))
       .catch(err => toast.error('Load failed', err.message))
       .finally(() => setFetching(false))
   }, [id])
@@ -32,9 +39,11 @@ export default function CandidateForm() {
     setLoading(true)
     try {
       const payload = {
-        ...form,
+        name: form.name,
+        role_applied: form.role_applied,
+        email: form.email || '',
+        phone: form.phone || '',
         experience_years: Number(form.experience_years) || 0,
-        match_score: Number(form.match_score) || 0,
         skills: form.skills ? form.skills.split(',').map(s => s.trim()).filter(Boolean) : [],
       }
       if (isEdit) {
@@ -71,9 +80,6 @@ export default function CandidateForm() {
         </Field>
         <Field label="Experience (years)">
           <Input type="number" min="0" value={form.experience_years} onChange={set('experience_years')} placeholder="4" />
-        </Field>
-        <Field label="Match Score (0–100)">
-          <Input type="number" min="0" max="100" value={form.match_score} onChange={set('match_score')} placeholder="75" />
         </Field>
         <Field label="Skills (comma-separated)" span={2}>
           <Input value={form.skills} onChange={set('skills')} placeholder="Python, FastAPI, Docker, PostgreSQL" />

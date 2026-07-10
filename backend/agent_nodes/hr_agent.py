@@ -28,9 +28,8 @@ from backend.models import (
     PerformanceReviewParams,
     HRMetrics,
 )
-from backend.planner.data_loader import get_employee, get_role_info
+from backend.planner.data_loader import get_document_context, get_employee, get_role_info,get_selected_document_contexts
 from backend.agent_nodes.llm import llm
-
 
 class HRAgent(BaseAgent):
 
@@ -356,7 +355,22 @@ Keep tasks specific and actionable. No day headings. No extra text.
             len(goals_achieved) / len(goals_set)
             if goals_set else 0.0
         )
-
+        
+        # Evidence documents resolved by the executor for THIS employee's
+        # exact goal + review_period only (workflow_document_resolution.py).
+        # Optional — [] is valid and produces identical behavior to before.
+        evidence_contexts = get_selected_document_contexts(state)
+        evidence_block = ""
+        if evidence_contexts:
+            evidence_lines = [
+                f"- {ctx.get('filename', 'evidence')}: {ctx.get('ai_summary', '')}"
+                for ctx in evidence_contexts
+            ]
+            evidence_block = f"""
+Supporting Evidence (supplements the goal data above — does not replace it):
+{chr(10).join(evidence_lines)}
+"""
+        
         prompt = f"""
 You are a senior HR performance evaluator. Evaluate the employee objectively.
 
@@ -367,7 +381,7 @@ Manager Comments: {params.manager_comments}
 Goals Set       : {goals_set}
 Goals Achieved  : {goals_achieved}
 Achievement Rate: {achievement * 100:.0f}%
-
+{evidence_block}
 Return in this exact format:
 
 SUMMARY:
@@ -562,7 +576,23 @@ No extra text. No headers.
             for m in wanted
             if m in defaults
         }
-
+        
+        # Prefer real HR metric documents when the executor resolved any
+        # for this workflow (params.hr_document_ids -> state.document_ids,
+        # see workflow_document_resolution.resolve_performance_report_documents).
+        # Falls back to mock defaults above for any metric the document
+        # doesn't cover — never fails if no document was selected.
+        hr_doc_ids = set(getattr(p, "hr_document_ids", []) or [])
+        for doc_id in hr_doc_ids & set(state.document_ids):
+            try:
+                ctx = get_document_context(state, doc_id)
+            except Exception as e:
+                print(f"[collect_hr_metrics] Skipping unreadable HR document {doc_id}: {e}")
+                continue
+            structured = ctx.get("structured_data") or {}
+            for m in wanted:
+                if structured.get(m) is not None:
+                    metrics[m] = structured[m]
         metrics["report_period"] = period
 
         return {

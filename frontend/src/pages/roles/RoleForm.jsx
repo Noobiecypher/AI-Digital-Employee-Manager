@@ -23,10 +23,10 @@ export default function RoleForm() {
     rolesApi.getOne(id)
       .then(data => setForm({
         ...data,
-        skills_required:     (data.skills_required || []).join(', '),
-        onboarding_checklist:(data.onboarding_checklist || []).join('\n'),
-        experience_years:    String(data.experience_years || ''),
-        rating_scale:        String(data.rating_scale || '5'),
+        skills_required:      (data.skills_required || []).join(', '),
+        onboarding_checklist: (data.onboarding_checklist || []).join('\n'),
+        experience_years:     String(data.experience_years || ''),
+        rating_scale:         String(data.rating_scale || '5'),
       }))
       .catch(err => toast.error('Load failed', err.message))
       .finally(() => setFetching(false))
@@ -39,12 +39,17 @@ export default function RoleForm() {
     setLoading(true)
     try {
       const payload = {
-        ...form,
+        department:           form.department,
         experience_years:     Number(form.experience_years) || 0,
         rating_scale:         Number(form.rating_scale) || 5,
         skills_required:      form.skills_required ? form.skills_required.split(',').map(s => s.trim()).filter(Boolean) : [],
         onboarding_checklist: form.onboarding_checklist ? form.onboarding_checklist.split('\n').map(s => s.trim()).filter(Boolean) : [],
+        location:             form.location || '',
+        salary_range:         form.salary_range || '',
       }
+      // role is the URL key on PUT — only include it in the body on create
+      if (!isEdit) payload.role = form.role
+
       if (isEdit) {
         await rolesApi.update(id, payload)
         toast.success('Role updated')
@@ -66,7 +71,7 @@ export default function RoleForm() {
     <FormCard title={isEdit ? 'Edit Role' : 'Add Role'} onBack={() => navigate('/roles')}>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
         <Field label="Role Title *">
-          <Input value={form.role} onChange={set('role')} placeholder="Backend Engineer" />
+          <Input value={form.role} onChange={set('role')} placeholder="Backend Engineer" disabled={isEdit} />
         </Field>
         <Field label="Department *">
           <Input value={form.department} onChange={set('department')} placeholder="Engineering" />

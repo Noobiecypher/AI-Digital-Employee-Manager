@@ -12,7 +12,6 @@ async function fetchJobs() {
 
   for (const wf of wfs) {
     if (wf.objective_id !== 'hire_employee') continue
-    // Need full workflow detail to get task_outputs
     try {
       const detail = await workflowsApi.getOne(wf.workflow_id || wf._id)
       const t1 = detail.task_outputs?.find(t => t.task_id === 't1')
@@ -21,7 +20,7 @@ async function fetchJobs() {
       jobs.push({
         job_id:       out.job_id || wf.workflow_id,
         workflow_id:  wf.workflow_id || wf._id,
-        title:        'Backend Engineer', // extracted from JD ideally
+        title:        'Backend Engineer',
         description:  out.job_description || '',
         embed_script: out.embed_script || '',
         status:       wf.status || 'completed',
@@ -34,13 +33,14 @@ async function fetchJobs() {
 }
 
 export default function JobsPage() {
-  const navigate          = useNavigate()
-  const toast             = useToast()
-  const { job_id }        = useParams()
-  const [jobs, setJobs]   = useState([])
-  const [loading, setLoading] = useState(true)
+  const navigate                = useNavigate()
+  const toast                   = useToast()
+  const { job_id }              = useParams()
+  const [jobs, setJobs]         = useState([])
+  const [loading, setLoading]   = useState(true)
   const [selected, setSelected] = useState(null)
   const [copied, setCopied]     = useState(false)
+  const [starting, setStarting] = useState(false)
 
   useEffect(() => {
     fetchJobs()
@@ -59,6 +59,28 @@ export default function JobsPage() {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     })
+  }
+
+  const handleStartShortlisting = async () => {
+    if (!selected) return
+    setStarting(true)
+    try {
+      const res = await workflowsApi.start({
+        objective_id: 'hire_employee',
+        params: {
+          role:       selected.title || 'Backend Engineer',
+          department: 'Engineering',
+          job_type:   'full-time',
+        },
+      })
+      const id = res.workflow_id || res.id
+      toast.success('Workflow started', 'Shortlisting workflow is now running')
+      if (id) navigate(`/workflows/${id}`)
+    } catch (err) {
+      toast.error('Failed to start', err.message)
+    } finally {
+      setStarting(false)
+    }
   }
 
   if (loading) return <PageLoader />
@@ -238,28 +260,31 @@ export default function JobsPage() {
                 </div>
               )}
 
-              {/* Close applications button */}
+              {/* Close & Shortlist */}
               <div style={{
                 background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)',
                 borderRadius: 'var(--radius-lg)', padding: '16px 20px',
                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
               }}>
                 <div>
-                  <div style={{ fontWeight: 600, fontSize: 13, color: '#F59E0B', marginBottom: 3 }}>Close Applications & Run Shortlisting</div>
+                  <div style={{ fontWeight: 600, fontSize: 13, color: '#F59E0B', marginBottom: 3 }}>
+                    Close Applications & Run Shortlisting
+                  </div>
                   <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                    Currently {selected.applicants} applicant{selected.applicants !== 1 ? 's' : ''}. Close when ready to shortlist.
+                    Currently {selected.applicants} applicant{selected.applicants !== 1 ? 's' : ''}. Starts a new hire_employee workflow to shortlist candidates.
                   </div>
                 </div>
                 <button
-                  disabled
-                  title="Requires backend endpoint — coming soon"
+                  onClick={handleStartShortlisting}
+                  disabled={starting}
                   style={{
                     padding: '8px 16px', borderRadius: 8, fontSize: 12.5, fontWeight: 500,
-                    border: '1px solid rgba(245,158,11,0.3)', background: 'rgba(245,158,11,0.1)',
-                    color: '#F59E0B', cursor: 'not-allowed', opacity: 0.5,
+                    border: '1px solid rgba(245,158,11,0.3)', background: 'rgba(245,158,11,0.15)',
+                    color: '#F59E0B', cursor: starting ? 'not-allowed' : 'pointer',
+                    opacity: starting ? 0.6 : 1, transition: 'all 0.15s',
                   }}
                 >
-                  Close & Shortlist
+                  {starting ? 'Starting...' : 'Close & Shortlist'}
                 </button>
               </div>
             </div>

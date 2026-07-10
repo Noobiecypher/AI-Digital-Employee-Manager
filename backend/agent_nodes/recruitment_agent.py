@@ -70,6 +70,7 @@ from backend.tools.email_tools import (
     notify_candidates,
     FollowUpStage,
 )
+from backend.execution.workflow_document_resolution import build_shortlisted_resume_summaries
 
 class RecruitmentAgent(BaseAgent):
 
@@ -337,6 +338,11 @@ No explanation. Just the skill list.
                 "No shortlisted candidates available to schedule interviews."
             )
 
+        # Resume grounding — supplements the shortlist, never blocks it.
+        # Candidates with no linked/approved resume simply get no entry here.
+        resume_summaries = build_shortlisted_resume_summaries(state, shortlisted)
+        interview_prep_notes = {}
+
         # TODO(person1): interviewer_email and calendar_id should come from
         # departments.json / DB, not be hardcoded placeholders.
         interviewer_email = os.getenv("DEFAULT_INTERVIEWER_EMAIL", "")
@@ -384,6 +390,31 @@ No explanation. Just the skill list.
 
             schedule.append(entry)
 
+            # Resume-grounded interview prep — only when an approved resume
+            # was resolved for this candidate; skipped otherwise, never fails.
+            resume_ctx = resume_summaries.get(candidate.get("candidate_id", ""))
+            if resume_ctx:
+                prep_prompt = f"""
+You are a technical interviewer preparing for a candidate interview.
+
+Candidate  : {candidate["name"]}
+Role       : {params.role}
+Resume summary:
+{resume_ctx.get("ai_summary", "")}
+
+Resume details:
+{resume_ctx.get("structured_data", {})}
+
+Suggest 3-4 specific interview questions grounded in this candidate's
+actual background. Return one question per line, no extra text.
+"""
+                try:
+                    prep_response = llm.invoke(prep_prompt)
+                    interview_prep_notes[candidate["name"]] = prep_response.content.strip()
+                except Exception as e:
+                    print(f"[schedule_interviews] Interview prep generation failed for "
+                          f"{candidate['name']}: {e}")
+
             # Follow-up email — confirms interview slot to candidate
             send_followup_email(
                 to_email         = candidate.get("email", ""),
@@ -395,7 +426,10 @@ No explanation. Just the skill list.
                 mode             = "Video Call",
             )
 
-        return {"interview_schedule": schedule}
+        return {
+            "interview_schedule": schedule,
+            "interview_prep_notes": interview_prep_notes,
+        }
 
     # ----------------------------------------------------------
     # t5 — prepare_offer
@@ -465,6 +499,33 @@ No explanation. Just the skill list.
                 )
             ]
 
+        selection_rationale = ""
+        if len(selected_candidates) > 1 or (not selected_names and len(shortlisted) > 1):
+            resume_summaries = build_shortlisted_resume_summaries(state, shortlisted)
+            comparison_candidates = selected_candidates if len(selected_candidates) > 1 else shortlisted
+            candidate_blocks = []
+            for c in comparison_candidates:
+                ctx = resume_summaries.get(c.get("candidate_id", ""))
+                resume_note = ctx.get("ai_summary", "") if ctx else "(no resume on file)"
+                candidate_blocks.append(
+                    f"- {c['name']} | match_score={c['match_score']} | resume: {resume_note}"
+                )
+
+            compare_prompt = f"""
+You are a hiring manager comparing final candidates for {params.role}.
+
+Candidates:
+{chr(10).join(candidate_blocks)}
+
+Using the resume details as supporting evidence alongside the match
+scores, briefly justify the strongest candidate(s) in 2-3 sentences.
+"""
+            try:
+                compare_response = llm.invoke(compare_prompt)
+                selection_rationale = compare_response.content.strip()
+            except Exception as e:
+                print(f"[prepare_offer] Candidate comparison generation failed: {e}")
+
         salary = self._parse_salary_midpoint(
             params.salary_range
         )
@@ -498,7 +559,8 @@ No explanation. Just the skill list.
         # Once frontend/reporting are updated, this can always return a list.
 
         return {
-            "offer_details": offers
+            "offer_details": offers,
+            "selection_rationale": selection_rationale,
         }
 
     # ----------------------------------------------------------

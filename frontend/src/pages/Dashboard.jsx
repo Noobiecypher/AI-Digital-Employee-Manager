@@ -199,38 +199,55 @@ export default function Dashboard() {
   const pending   = data.workflows.filter(w => w.awaiting_human_input === true)
   const running   = data.workflows.filter(w => w.status === 'running' || w.state === 'running')
   const recent    = [...data.workflows].reverse().slice(0, 5)
-  const analytics = data.analytics || {}
+
+  // ── Correctly unpack the backend response shape ──
+  // Backend: { metrics: { total_workflows, completed, failed, running, paused, success_rate },
+  //            charts: [...], objective_distribution: {...} }
+  const analyticsRaw = data.analytics || {}
+  const metrics      = analyticsRaw.metrics || {}
+
+  const mCompleted = metrics.completed       ?? 0
+  const mFailed    = metrics.failed          ?? 0
+  const mRunning   = metrics.running         ?? 0
+  const mPaused    = metrics.paused          ?? 0
+  const mTotal     = metrics.total_workflows ?? (mCompleted + mFailed + mRunning + mPaused)
+  const successRate = mTotal > 0 ? Math.round((mCompleted / mTotal) * 100) : 0
+
+  // Charts — backend returns charts[] and agent_usage as object {agent: count}
+  const charts   = analyticsRaw.charts || []
+  const agentObj = analyticsRaw.agent_usage || {}
 
   const donutData = [
-    { name: 'Completed', value: analytics.completed || 0 },
-    { name: 'Running',   value: analytics.running   || 0 },
-    { name: 'Pending',   value: analytics.paused    || 0 },
-    { name: 'Failed',    value: analytics.failed    || 0 },
+    { name: 'Completed', value: mCompleted },
+    { name: 'Running',   value: mRunning   },
+    { name: 'Paused',    value: mPaused    },
+    { name: 'Failed',    value: mFailed    },
   ].filter(d => d.value > 0)
 
-  const lineData = (analytics.workflow_execution_history || analytics.charts || [])
-    .slice(-7)
-    .map((h, i) => ({
-      day: h.date ? new Date(h.date).toLocaleDateString('en', { month: 'short', day: 'numeric' }) : `Day ${i + 1}`,
-      workflows: 1,
+  // Build full 7-day skeleton so every day shows on the X axis even with 0 workflows.
+  // Generate the last 7 days as labels, then fill in counts from charts[].
+  const last7Days = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date()
+    d.setDate(d.getDate() - (6 - i)) // oldest first
+    return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit' }).replace(',', '')
+  })
+  const countsByDay = charts.reduce((acc, h) => {
+    const day = h.date || ''
+    acc[day] = (acc[day] || 0) + 1
+    return acc
+  }, {})
+  const lineData = last7Days.map(day => ({ day, workflows: countsByDay[day] || 0 }))
+
+  // agent_usage is { recruitment: 5, hr: 3, ... } — convert to array
+  const agentData = Object.entries(agentObj)
+    .filter(([name]) => name !== 'human')
+    .map(([name, runs]) => ({
+      name: name.replace(/_/g, ' '),
+      runs: typeof runs === 'number' ? runs : 0,
     }))
-    .reduce((acc, cur) => {
-      const existing = acc.find(a => a.day === cur.day)
-      if (existing) { existing.workflows++; return acc }
-      return [...acc, { ...cur, workflows: 1 }]
-    }, [])
+    .sort((a, b) => b.runs - a.runs)
 
-  const agentData = (analytics.agent_usage || []).map(a => ({
-    name: (a.assigned_agent || a.agent || '').replace(/_/g, ' '),
-    runs: a.count || a.usage || 0,
-  }))
 
-  const candidateScoreData = data.candidates.map(c => ({
-    name: c.name?.split(' ')[0] || 'Unknown',
-    score: Math.round(c.match_score || 0),
-  }))
-
-  const successRate = Math.round(analytics.success_rate || 0)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20, width: '100%', boxSizing: 'border-box' }}>
@@ -254,7 +271,7 @@ export default function Dashboard() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 14 }}>
         <StatCard label="Total Employees" value={data.employees.length}  sub="Active headcount"    color="#6366F1" />
         <StatCard label="Candidates"      value={data.candidates.length} sub="In pipeline"         color="#06B6D4" />
-        <StatCard label="Workflows Run"   value={analytics.total_workflows ?? data.workflows.length} sub="All time" color="#8B5CF6" />
+        <StatCard label="Workflows Run"   value={mTotal}                 sub="All time"            color="#8B5CF6" />
         <StatCard label="Success Rate"    value={`${successRate}%`}      sub="Completed workflows" color="#10B981" />
         <StatCard label="Needs Approval"  value={pending.length}         sub="Pending review"      color="#F59E0B" />
         <StatCard label="Running Now"     value={running.length}         sub="In progress"         color="#06B6D4" />
@@ -300,7 +317,7 @@ export default function Dashboard() {
         </ChartCard>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr) minmax(0,1fr)', gap: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,2fr) minmax(0,1fr)', gap: 14 }}>
         <ChartCard title="Agent Usage">
           {agentData.length > 0 ? (
             <ResponsiveContainer width="100%" height={180}>
@@ -313,24 +330,6 @@ export default function Dashboard() {
               </BarChart>
             </ResponsiveContainer>
           ) : <EmptyChart message="No agent data yet" />}
-        </ChartCard>
-
-        <ChartCard title="Candidate Match Scores">
-          {candidateScoreData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={180}>
-              <BarChart data={candidateScoreData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-                <XAxis dataKey="name" tick={{ fill: '#475569', fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis domain={[0, 100]} tick={{ fill: '#475569', fontSize: 11 }} axisLine={false} tickLine={false} />
-                <Tooltip content={<CustomTooltip />} />
-                <Bar dataKey="score" radius={[4, 4, 0, 0]} name="Match %">
-                  {candidateScoreData.map((entry, i) => (
-                    <Cell key={i} fill={entry.score >= 70 ? '#10B981' : entry.score >= 40 ? '#F59E0B' : '#EF4444'} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          ) : <EmptyChart message="No candidates yet" />}
         </ChartCard>
 
         <ChartCard title="Success Rate">
@@ -352,9 +351,9 @@ export default function Dashboard() {
             </div>
             <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 7, marginTop: 4 }}>
               {[
-                { label: 'Completed', value: analytics.completed || 0, color: '#10B981' },
-                { label: 'Failed',    value: analytics.failed    || 0, color: '#EF4444' },
-                { label: 'Running',   value: analytics.running   || 0, color: '#6366F1' },
+                { label: 'Completed', value: mCompleted, color: '#10B981' },
+                { label: 'Failed',    value: mFailed,    color: '#EF4444' },
+                { label: 'Running',   value: mRunning,   color: '#6366F1' },
               ].map(s => (
                 <div key={s.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12 }}>

@@ -57,13 +57,6 @@ from enum import Enum
 # ---------------------------------------------------------------------------
 
 class SystemRole(str, Enum):
-    """
-    Every valid system role.
-
-    Each user holds exactly one of these roles.
-    The value is the string stored in the ``role`` field of a user document.
-    """
-
     ADMIN     = "admin"
     MANAGER   = "manager"
     HR        = "hr"
@@ -76,13 +69,6 @@ class SystemRole(str, Enum):
 # ---------------------------------------------------------------------------
 
 class Permission(str, Enum):
-    """
-    Granular permissions used for route-level authorisation.
-
-    Permission values follow the ``"domain:action"`` naming convention to
-    make the scope immediately clear at each call-site.
-    """
-
     # ---- employees -------------------------------------------------------
     EMPLOYEES_READ   = "employees:read"
     EMPLOYEES_CREATE = "employees:create"
@@ -141,25 +127,25 @@ class Permission(str, Enum):
 
 ROLE_PERMISSIONS: dict[SystemRole, frozenset[Permission]] = {
 
-    # Admin receives every defined permission automatically.
     SystemRole.ADMIN: frozenset(Permission),
 
-    # Manager: broad read/write across most domains; no deletes; no
-    # system user management; no products:create/update/delete.
     SystemRole.MANAGER: frozenset({
         Permission.EMPLOYEES_READ,
         Permission.EMPLOYEES_CREATE,
         Permission.EMPLOYEES_UPDATE,
+        Permission.EMPLOYEES_DELETE,
 
         Permission.CANDIDATES_READ,
         Permission.CANDIDATES_CREATE,
         Permission.CANDIDATES_UPDATE,
+        Permission.CANDIDATES_DELETE,
 
         Permission.PRODUCTS_READ,
 
         Permission.GOALS_READ,
         Permission.GOALS_CREATE,
         Permission.GOALS_UPDATE,
+        Permission.GOALS_DELETE,
 
         Permission.BUSINESS_ROLES_READ,
 
@@ -176,9 +162,6 @@ ROLE_PERMISSIONS: dict[SystemRole, frozenset[Permission]] = {
         Permission.DOCUMENTS_IMPORT,
     }),
 
-    # HR: full candidate lifecycle (incl. delete); employee read/write;
-    # goal management; workflow access. No products, no analytics,
-    # no system user management.
     SystemRole.HR: frozenset({
         Permission.EMPLOYEES_READ,
         Permission.EMPLOYEES_CREATE,
@@ -206,18 +189,12 @@ ROLE_PERMISSIONS: dict[SystemRole, frozenset[Permission]] = {
         Permission.DOCUMENTS_IMPORT,
     }),
 
-    # Employee: own profile read + contact-info update; own goals read.
-    # Fine-grained own-resource enforcement is the service layer's
-    # responsibility; this layer grants coarse domain access only.
     SystemRole.EMPLOYEE: frozenset({
         Permission.EMPLOYEES_READ,
         Permission.GOALS_READ,
         Permission.GOALS_UPDATE,
     }),
 
-    # Candidate: own application information read-only.
-    # Fine-grained own-resource enforcement is the service layer's
-    # responsibility.
     SystemRole.CANDIDATE: frozenset({
         Permission.CANDIDATES_READ,
     }),
@@ -229,26 +206,9 @@ ROLE_PERMISSIONS: dict[SystemRole, frozenset[Permission]] = {
 # ---------------------------------------------------------------------------
 
 def has_permission(role: SystemRole | str, permission: Permission) -> bool:
-    """
-    Return True if ``role`` is granted ``permission``.
-
-    Accepts either a ``SystemRole`` enum member or its raw string value
-    (as stored in a MongoDB user document) so callers do not need to
-    coerce before checking.
-
-    Args:
-        role:       SystemRole member or its string value (e.g. ``"manager"``).
-        permission: The Permission enum member to check.
-
-    Returns:
-        True if the role has the permission.
-        False for unknown/invalid roles rather than raising, so that
-        misconfigured documents fail closed.
-    """
     if isinstance(role, str):
         try:
             role = SystemRole(role)
         except ValueError:
             return False
-
     return permission in ROLE_PERMISSIONS.get(role, frozenset())

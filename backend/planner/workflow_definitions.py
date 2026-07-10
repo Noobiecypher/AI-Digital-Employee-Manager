@@ -164,15 +164,17 @@ WORKFLOWS = {
 
         Task(
             task_id="t8",
-            agent="reporting",
-            action="generate_campaign_summary",
-            depends_on=["t7"]
-        ),
-        Task(
-            task_id="t7",
             agent="human",
             action="manager_approval",
-            depends_on=["t6"]
+            approver_role="MANAGER",
+            depends_on=["t7"]
+        ),
+
+        Task(
+            task_id="t9",
+            agent="reporting",
+            action="generate_campaign_summary",
+            depends_on=["t8"]
         ),
     ],
     "performance_report": [

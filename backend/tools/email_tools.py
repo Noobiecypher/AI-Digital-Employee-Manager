@@ -31,7 +31,6 @@ SMTP_USER      = os.getenv("SMTP_USER", "")
 SMTP_PASSWORD  = os.getenv("SMTP_PASSWORD", "")
 SMTP_FROM_NAME = os.getenv("SMTP_FROM_NAME", "Recruitment Team")
 
-
 # ==========================================================
 # STAGE TEMPLATES
 # ==========================================================
@@ -84,6 +83,19 @@ _STAGE_SUBJECTS = {
 # ==========================================================
 # EMAIL GENERATION
 # ==========================================================
+def _get_smtp_connection():
+    """
+    Returns an already-connected SMTP client, choosing the right
+    protocol for the configured port:
+      - 465 -> implicit SSL (SMTP_SSL)
+      - anything else (587, 25, etc.) -> plaintext + STARTTLS
+    """
+    if SMTP_PORT == 465:
+        return smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT)
+
+    server = smtplib.SMTP(SMTP_HOST, SMTP_PORT)
+    server.starttls()
+    return server
 
 def generate_followup_email(stage: str, **context) -> str:
     """
@@ -128,7 +140,7 @@ def send_followup_email(
     """
 
     if not to_email:
-        print(f"[email_followup] Skipped — no email address for stage '{stage}'")
+        logger.warning("Skipped '%s' email — no email address on candidate", stage)
         return False
 
     try:
@@ -141,8 +153,7 @@ def send_followup_email(
         msg["Subject"] = subject
         msg.attach(MIMEText(body, "plain"))
 
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
-            server.starttls()
+        with _get_smtp_connection() as server:
             server.login(SMTP_USER, SMTP_PASSWORD)
             server.send_message(msg)
 

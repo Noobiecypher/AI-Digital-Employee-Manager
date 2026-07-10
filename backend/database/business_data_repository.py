@@ -864,6 +864,56 @@ class BusinessDataRepository:
         )
         return self.get_candidate(candidate_id)
 
+    def update_candidate_match_score(
+        self,
+        name: str,
+        match_score: float,
+    ) -> bool:
+        """
+        Update match_score for a candidate matched by name.
+
+        Called exclusively by the recruitment agent after shortlisting.
+        match_score is intentionally excluded from the general update_candidate()
+        surface so that frontend CRUD cannot overwrite workflow-computed scores.
+
+        Args:
+            name:        Candidate full name (case-insensitive match).
+            match_score: Float 0.0–1.0 computed by the shortlisting algorithm.
+
+        Returns:
+            True if a candidate was found and updated, False if not found.
+
+        Raises:
+            RuntimeError: On any PyMongo failure.
+        """
+        try:
+            result = self.candidates.update_one(
+                {"name": {"$regex": f"^{re.escape(name)}$", "$options": "i"}},
+                {"$set": {"match_score": round(match_score, 2)}},
+            )
+            updated = result.matched_count > 0
+            if updated:
+                logger.debug(
+                    "match_score updated for candidate '%s' → %.2f",
+                    name,
+                    match_score,
+                )
+            else:
+                logger.warning(
+                    "update_candidate_match_score: no candidate found with name '%s'",
+                    name,
+                )
+            return updated
+        except PyMongoError as exc:
+            logger.error(
+                "update_candidate_match_score('%s') failed: %s",
+                name,
+                exc,
+            )
+            raise RuntimeError(
+                f"Failed to update match_score for candidate '{name}': {exc}"
+            ) from exc
+
     def delete_candidate(self, candidate_id: str) -> None:
         """
         Delete a candidate by UUID.

@@ -19,10 +19,6 @@ from backend.auth.permissions import (
     Permission,
 )
 
-from backend.execution.workflow_document_resolution import (
-    build_shortlisted_resume_summaries,
-)
-
 from pydantic import ValidationError
 from backend.planner.workflow_definitions import WORKFLOWS
 from backend.api.schemas import TaskOutputItem
@@ -177,60 +173,6 @@ def map_executor_error(exc: Exception):
         str(exc),
     )
 
-def get_approval_context(state) -> dict | None:
-
-    if not (
-        state.status == "paused"
-        and state.awaiting_human_input
-    ):
-        return None
-
-    workflow_tasks = WORKFLOWS.get(
-        state.objective_id,
-        []
-    )
-
-    current_gate = next(
-        (
-            task
-            for task in workflow_tasks
-            if task.task_id == state.current_task_id
-        ),
-        None
-    )
-
-    if current_gate is None:
-        return None
-
-    approval_context = {}
-
-    for dependency in current_gate.depends_on:
-        approval_context.update(
-            state.outputs.get(
-                dependency,
-                {}
-            )
-        )
-
-    if (
-        state.objective_id == "hire_employee"
-        and state.current_task_id == "t5"
-    ):
-        shortlisted_candidates = (
-            state.outputs
-            .get("t3", {})
-            .get("shortlisted_candidates", [])
-        )
-
-        resume_summaries = build_shortlisted_resume_summaries(
-            state,
-            shortlisted_candidates,
-        )
-
-        if resume_summaries:
-            approval_context["resume_summaries"] = resume_summaries
-
-    return approval_context
 
 def build_workflow_response(state) -> WorkflowResponse:
 
@@ -284,7 +226,12 @@ def build_workflow_response(state) -> WorkflowResponse:
         awaiting_human_input=state.awaiting_human_input,
         approval_status=state.approval_status,
 
-        approval_context=get_approval_context(state),
+        approval_context=(
+            state.outputs.get("t5")
+            if state.status == "paused"
+            and state.awaiting_human_input
+            else None
+        ),
 
         human_feedback=state.human_feedback,
         error_message=state.error_message,
@@ -613,7 +560,10 @@ async def get_latest_report(
                 analytics["charts"],
 
             "objective_distribution":
-                analytics["objective_distribution"],    
+                analytics["objective_distribution"],
+
+            "agent_usage":
+                analytics["reporting_input"]["agent_usage"],
 
             "insights":
                 ai_insights,
@@ -629,4 +579,3 @@ async def get_latest_report(
             )
         )
 # -----------------------------
-

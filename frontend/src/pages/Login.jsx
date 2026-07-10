@@ -13,61 +13,39 @@ const WORKFLOW_STEPS = [
 ]
 
 const STATS = [
-  { value: '6',    label: 'Workflow Types',    color: '#6366F1' },
-  { value: '5',    label: 'Role Permissions',  color: '#06B6D4' },
-  { value: '100%', label: 'Real-Time Sync',    color: '#10B981' },
-  { value: '3+',   label: 'AI Agents',         color: '#8B5CF6' },
+  { value: '6',    label: 'Workflow Types',   color: '#6366F1' },
+  { value: '5',    label: 'Role Permissions', color: '#06B6D4' },
+  { value: '100%', label: 'Real-Time Sync',   color: '#10B981' },
+  { value: '3+',   label: 'AI Agents',        color: '#8B5CF6' },
 ]
-
-const ROLES = ['admin', 'manager', 'hr', 'employee', 'candidate']
 
 export default function Login() {
   const navigate = useNavigate()
   const { login } = useRole()
-  const [username, setUsername] = useState('')
+
+  const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
   const [error, setError]       = useState('')
   const [loading, setLoading]   = useState(false)
+  const [showPw, setShowPw]     = useState(false)
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
-    if (!username || !password) return setError('Enter username and password')
+    if (!email || !password) return setError('Please enter your email and password.')
     setLoading(true)
     try {
-      const res = await authApi.login(username, password)
+      const res  = await authApi.login(email, password)
       const user = await authApi.me(res.access_token)
       login(res.access_token, {
-        id: user.user_id,
+        id:       user.user_id,
         username: user.full_name,
-        email: user.email,
-        role: user.role,
+        email:    user.email,
+        role:     user.role,
       })
       navigate('/dashboard')
     } catch (err) {
-      setError(err.message || 'Invalid credentials')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // DEV ONLY — calls POST /auth/mock-login which issues a real JWT by role.
-  // Remove the mock buttons and this function when switching to real credentials.
-  const handleMockLogin = async (role) => {
-    setError('')
-    setLoading(true)
-    try {
-      const res = await authApi.mockLogin(role)
-      const user = await authApi.me(res.access_token)
-      login(res.access_token, {
-        id: user.user_id,
-        username: user.full_name,
-        email: user.email,
-        role: user.role,
-      })
-      navigate('/dashboard')
-    } catch (err) {
-      setError(err.message || `Mock login failed for role: ${role}`)
+      setError(err.message || 'Invalid email or password.')
     } finally {
       setLoading(false)
     }
@@ -85,10 +63,18 @@ export default function Login() {
         @keyframes floatY  { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
         @keyframes drift   { 0%{transform:translate(0,0)} 50%{transform:translate(20px,-15px)} 100%{transform:translate(0,0)} }
         @keyframes pulse   { 0%,100%{opacity:1} 50%{opacity:0.3} }
-        @keyframes slideIn { from{opacity:0;transform:translateX(-8px)} to{opacity:1;transform:translateX(0)} }
+        @keyframes spin    { to { transform: rotate(360deg) } }
+        .login-input {
+          width: 100%; padding: 12px 14px; border-radius: 9px; font-size: 13.5px;
+          border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.025);
+          color: #F1F5F9; outline: none; transition: border-color 0.2s, box-shadow 0.2s;
+          font-family: inherit; box-sizing: border-box;
+        }
+        .login-input::placeholder { color: #334155; }
+        .login-input:focus { border-color: #6366F1; box-shadow: 0 0 0 3px rgba(99,102,241,0.15); }
       `}</style>
 
-      {/* ── LEFT PANEL ── */}
+      {/* ── LEFT PANEL — clean professional login ── */}
       <div style={{
         width: 420, flexShrink: 0,
         display: 'flex', flexDirection: 'column', justifyContent: 'center',
@@ -112,81 +98,102 @@ export default function Login() {
         <h1 style={{ fontSize: 26, fontWeight: 700, color: '#F1F5F9', marginBottom: 6, letterSpacing: '-0.02em' }}>
           Welcome back
         </h1>
-        <p style={{ fontSize: 13.5, color: '#64748B', marginBottom: 32 }}>
+        <p style={{ fontSize: 13.5, color: '#64748B', marginBottom: 36 }}>
           Sign in to access your dashboard
         </p>
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+          {/* Email */}
           <div>
-            <label style={{ fontSize: 12, fontWeight: 600, color: '#94A3B8', display: 'block', marginBottom: 6, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Username</label>
+            <label style={{ fontSize: 11.5, fontWeight: 600, color: '#94A3B8', display: 'block', marginBottom: 7, letterSpacing: '0.03em', textTransform: 'uppercase' }}>
+              Email address
+            </label>
             <input
-              value={username} onChange={e => setUsername(e.target.value)}
-              placeholder="Enter your username"
-              autoComplete="username"
-              style={iStyle}
-              onFocus={e => { e.target.style.borderColor = '#6366F1'; e.target.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.15)' }}
-              onBlur={e => { e.target.style.borderColor = 'rgba(255,255,255,0.08)'; e.target.style.boxShadow = 'none' }}
-            />
-          </div>
-          <div>
-            <label style={{ fontSize: 12, fontWeight: 600, color: '#94A3B8', display: 'block', marginBottom: 6, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Password</label>
-            <input
-              type="password" value={password} onChange={e => setPassword(e.target.value)}
-              placeholder="Enter your password"
-              autoComplete="current-password"
-              style={iStyle}
-              onFocus={e => { e.target.style.borderColor = '#6366F1'; e.target.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.15)' }}
-              onBlur={e => { e.target.style.borderColor = 'rgba(255,255,255,0.08)'; e.target.style.boxShadow = 'none' }}
+              className="login-input"
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="you@company.com"
+              autoComplete="email"
+              autoFocus
             />
           </div>
 
+          {/* Password */}
+          <div>
+            <label style={{ fontSize: 11.5, fontWeight: 600, color: '#94A3B8', display: 'block', marginBottom: 7, letterSpacing: '0.03em', textTransform: 'uppercase' }}>
+              Password
+            </label>
+            <div style={{ position: 'relative' }}>
+              <input
+                className="login-input"
+                type={showPw ? 'text' : 'password'}
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="••••••••"
+                autoComplete="current-password"
+                style={{ paddingRight: 44 }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPw(s => !s)}
+                tabIndex={-1}
+                style={{
+                  position: 'absolute', right: 13, top: '50%', transform: 'translateY(-50%)',
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: '#475569', padding: 2, display: 'flex', alignItems: 'center',
+                  transition: 'color 0.15s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.color = '#94A3B8'}
+                onMouseLeave={e => e.currentTarget.style.color = '#475569'}
+              >
+                {showPw ? (
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                ) : (
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Error */}
           {error && (
-            <div style={{ fontSize: 13, color: '#EF4444', padding: '9px 13px', background: 'rgba(239,68,68,0.08)', borderRadius: 9, border: '1px solid rgba(239,68,68,0.2)' }}>
+            <div style={{
+              display: 'flex', alignItems: 'flex-start', gap: 8,
+              fontSize: 13, color: '#FCA5A5', padding: '10px 13px',
+              background: 'rgba(239,68,68,0.08)', borderRadius: 9,
+              border: '1px solid rgba(239,68,68,0.2)',
+            }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#EF4444" strokeWidth="2.5" style={{ flexShrink: 0, marginTop: 1 }}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
               {error}
             </div>
           )}
 
-          <button type="submit" disabled={loading} style={{
-            padding: '12px', borderRadius: 10, fontSize: 14, fontWeight: 600,
-            border: 'none', cursor: loading ? 'not-allowed' : 'pointer',
-            background: 'linear-gradient(135deg, #6366F1, #4F46E5)',
-            color: '#fff', opacity: loading ? 0.7 : 1,
-            boxShadow: '0 4px 20px rgba(99,102,241,0.35)',
-            marginTop: 4, transition: 'transform 0.15s',
-          }}
+          {/* Submit */}
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              padding: '12px', borderRadius: 10, fontSize: 14, fontWeight: 600,
+              border: 'none', cursor: loading ? 'not-allowed' : 'pointer',
+              background: 'linear-gradient(135deg, #6366F1, #4F46E5)',
+              color: '#fff', opacity: loading ? 0.7 : 1,
+              boxShadow: '0 4px 20px rgba(99,102,241,0.35)',
+              marginTop: 4, transition: 'transform 0.15s',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            }}
             onMouseEnter={e => { if (!loading) e.currentTarget.style.transform = 'translateY(-1px)' }}
             onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
           >
-            {loading ? 'Signing in...' : 'Sign In'}
+            {loading && (
+              <span style={{ width: 14, height: 14, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.7s linear infinite', display: 'inline-block' }} />
+            )}
+            {loading ? 'Signing in…' : 'Sign In'}
           </button>
         </form>
-
-        {/* Mock login — DEV ONLY */}
-        <div style={{ marginTop: 28 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-            <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.07)' }} />
-            <span style={{ fontSize: 10, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.09em', whiteSpace: 'nowrap' }}>Quick Test Login</span>
-            <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.07)' }} />
-          </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, justifyContent: 'center' }}>
-            {ROLES.map(role => (
-              <button key={role} onClick={() => handleMockLogin(role)} disabled={loading} style={{
-                padding: '6px 14px', borderRadius: 20, fontSize: 11.5, fontWeight: 500,
-                border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.02)',
-                color: '#94A3B8', cursor: loading ? 'not-allowed' : 'pointer',
-                textTransform: 'capitalize', transition: 'all 0.15s',
-              }}
-                onMouseEnter={e => { if (!loading) { e.currentTarget.style.background = 'rgba(99,102,241,0.12)'; e.currentTarget.style.color = '#818CF8'; e.currentTarget.style.borderColor = 'rgba(99,102,241,0.3)' }}}
-                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.02)'; e.currentTarget.style.color = '#94A3B8'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)' }}
-              >
-                {role}
-              </button>
-            ))}
-          </div>
-        </div>
       </div>
 
-      {/* ── RIGHT PANEL — takes all remaining space ── */}
+      {/* ── RIGHT PANEL — unchanged from original ── */}
       <div style={{
         flex: 1,
         position: 'relative',
@@ -207,7 +214,7 @@ export default function Login() {
           maskImage: 'radial-gradient(ellipse 85% 65% at 40% 35%, black, transparent)',
         }} />
 
-        {/* Main content — centered in remaining space */}
+        {/* Main content */}
         <div style={{
           position: 'relative', zIndex: 1, flex: 1,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -215,7 +222,6 @@ export default function Login() {
         }}>
           <div style={{ width: '100%', maxWidth: 900, display: 'flex', flexDirection: 'column', gap: 40 }}>
 
-            {/* Header */}
             <div>
               <div style={{
                 display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -235,13 +241,10 @@ export default function Login() {
               </p>
             </div>
 
-            {/* Two-column: workflow card + stats */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-
               {/* Workflow card */}
               <div style={{
-                background: 'rgba(15,22,41,0.75)',
-                backdropFilter: 'blur(20px)',
+                background: 'rgba(15,22,41,0.75)', backdropFilter: 'blur(20px)',
                 border: '1px solid rgba(255,255,255,0.08)',
                 borderRadius: 18, padding: '22px 24px',
                 boxShadow: '0 24px 64px rgba(0,0,0,0.45)',
@@ -260,7 +263,6 @@ export default function Login() {
                     Completed
                   </span>
                 </div>
-
                 {WORKFLOW_STEPS.map((step, i, arr) => (
                   <div key={step.label} style={{ display: 'flex', gap: 12 }}>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
@@ -283,16 +285,13 @@ export default function Login() {
                 ))}
               </div>
 
-              {/* Right column: stats + feature rows */}
+              {/* Right column: stats + features */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                {/* Stat grid */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   {STATS.map(stat => (
                     <div key={stat.label} style={{
-                      background: 'rgba(15,22,41,0.6)',
-                      border: '1px solid rgba(255,255,255,0.07)',
-                      borderRadius: 14, padding: '16px 18px',
-                      position: 'relative', overflow: 'hidden',
+                      background: 'rgba(15,22,41,0.6)', border: '1px solid rgba(255,255,255,0.07)',
+                      borderRadius: 14, padding: '16px 18px', position: 'relative', overflow: 'hidden',
                     }}>
                       <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, ${stat.color}, transparent)` }} />
                       <div style={{ fontSize: 22, fontWeight: 700, color: '#F1F5F9', marginBottom: 3, letterSpacing: '-0.02em' }}>{stat.value}</div>
@@ -300,8 +299,6 @@ export default function Login() {
                     </div>
                   ))}
                 </div>
-
-                {/* Feature list */}
                 {[
                   { title: 'Automated Recruitment', desc: 'AI agents handle shortlisting and offers end-to-end.', icon: '👥', color: '#6366F1' },
                   { title: 'Real-Time Workflows',   desc: 'Track every agent task live from posting to approval.', icon: '⚡', color: '#06B6D4' },
@@ -339,7 +336,7 @@ export default function Login() {
           <span style={{ fontSize: 12, color: '#334155' }}>© 2025 AI Digital Employee Platform · BITS Pilani</span>
           <div style={{ display: 'flex', gap: 20 }}>
             {['Admin', 'Manager', 'HR', 'Employee', 'Candidate'].map(role => (
-              <span key={role} style={{ fontSize: 11.5, color: '#334155', textTransform: 'capitalize' }}>{role}</span>
+              <span key={role} style={{ fontSize: 11.5, color: '#334155' }}>{role}</span>
             ))}
           </div>
           <span style={{ fontSize: 12, color: '#334155' }}>v1.0.0</span>
@@ -347,10 +344,4 @@ export default function Login() {
       </div>
     </div>
   )
-}
-
-const iStyle = {
-  width: '100%', padding: '11px 13px', borderRadius: 9, fontSize: 13.5,
-  border: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.025)',
-  color: '#F1F5F9', outline: 'none', boxSizing: 'border-box', transition: 'all 0.15s',
 }

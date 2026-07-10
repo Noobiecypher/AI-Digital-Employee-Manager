@@ -51,7 +51,7 @@ export default function DataTable({ columns, data, loading, emptyMessage = 'No d
             ) : (
               data.map((row, i) => (
                 <tr
-                  key={row._id || row.id || i}
+                  key={row._id || row.candidate_id || row.employee_id || row.id || row.product_id || row.workflow_id || i}
                   onClick={() => onRowClick?.(row)}
                   style={{
                     borderBottom: i < data.length - 1 ? '1px solid var(--color-border)' : 'none',

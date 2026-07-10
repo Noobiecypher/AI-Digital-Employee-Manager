@@ -37,7 +37,7 @@ from langchain_ollama import ChatOllama
 # ---------------------------------------------------------------------------
 
 MODEL_NAME        = "qwen2.5:1.5b"
-OLLAMA_BASE_URL   = "http://localhost:11434"
+OLLAMA_BASE_URL   = "http://127.0.0.1:11434"
 TEMPERATURE       = 0.3             # lower = more deterministic, better for structured tasks
 MAX_TOKENS        = 2048
 

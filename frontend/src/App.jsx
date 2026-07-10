@@ -14,6 +14,7 @@ import ProductList from './pages/products/ProductList'
 import ProductForm from './pages/products/ProductForm'
 import GoalsDashboard from './pages/goals/GoalsDashboard'
 import GoalDetail from './pages/goals/GoalDetail'
+import GoalForm from './pages/goals/GoalForm'
 import RoleList from './pages/roles/RoleList'
 import RoleForm from './pages/roles/RoleForm'
 import WorkflowDashboard from './pages/workflows/WorkflowDashboard'
@@ -48,9 +49,10 @@ export default function App() {
             <Route path="notifications" element={<Notifications />} />
             <Route path="unauthorized"  element={<Unauthorized />} />
 
-            {/* Goals — accessible to multiple roles, permission matrix handles fine-grain */}
-            <Route path="goals"     element={<ProtectedRoute><GoalsDashboard /></ProtectedRoute>} />
-            <Route path="goals/:id" element={<ProtectedRoute><GoalDetail /></ProtectedRoute>} />
+            {/* Goals — accessible to multiple roles */}
+            <Route path="goals"                                    element={<ProtectedRoute><GoalsDashboard /></ProtectedRoute>} />
+            <Route path="goals/new"                                element={<ProtectedRoute><GoalForm /></ProtectedRoute>} />
+            <Route path="goals/:employee_name/:period"             element={<ProtectedRoute><GoalDetail /></ProtectedRoute>} />
 
             {/* Employees — HR + Admin */}
             <Route path="employees"          element={<ProtectedRoute><EmployeeList /></ProtectedRoute>} />

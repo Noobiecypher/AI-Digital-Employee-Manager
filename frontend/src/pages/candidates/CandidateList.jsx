@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom' 
 import { candidatesApi } from '../../api/candidates'
 import DataTable from '../../components/ui/DataTable'
 import ConfirmDialog from '../../components/ui/ConfirmDialog'
@@ -27,7 +27,8 @@ export default function CandidateList() {
     }
   }
 
-  useEffect(() => { load() }, [])
+  const location = useLocation()
+  useEffect(() => { load() }, [location.key])
 
   const handleDelete = async () => {
     try {
