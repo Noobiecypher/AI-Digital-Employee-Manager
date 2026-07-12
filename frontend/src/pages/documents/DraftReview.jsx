@@ -26,7 +26,6 @@ function StatusPill({ status }) {
   )
 }
 
-// Render one field from the requirements contract
 function FieldInput({ field, value, onChange }) {
   const baseStyle = {
     width: '100%', padding: '9px 12px', borderRadius: 8, fontSize: 13,
@@ -92,7 +91,6 @@ function FieldInput({ field, value, onChange }) {
     )
   }
 
-  // Default: text
   return (
     <input
       type="text"
@@ -105,9 +103,10 @@ function FieldInput({ field, value, onChange }) {
 }
 
 export default function DraftReview() {
-  const { draftId } = useParams()
-  const navigate    = useNavigate()
-  const toast       = useToast()
+  // Fix: route is /documents/drafts/:id — must destructure 'id', not 'draftId'
+  const { id: draftId } = useParams()
+  const navigate = useNavigate()
+  const toast    = useToast()
 
   const [draft, setDraft]           = useState(null)
   const [requirements, setReqs]     = useState([])
@@ -120,6 +119,7 @@ export default function DraftReview() {
   const [showRejectModal, setShowRejectModal] = useState(false)
 
   useEffect(() => {
+    if (!draftId) return
     Promise.all([
       documentsApi.getDraft(draftId),
       documentsApi.getDraftRequirements(draftId),
@@ -179,7 +179,7 @@ export default function DraftReview() {
     setImporting(true)
     try {
       const res = await documentsApi.importDraft(draftId)
-      toast.success('Imported', `${res.target_business_entity} created successfully`)
+      toast.success('Imported', `${res.target_business_entity || 'Record'} created successfully`)
       navigate('/documents')
     } catch (err) {
       toast.error('Import failed', err.message)
@@ -219,12 +219,12 @@ export default function DraftReview() {
         display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 20px',
       }}>
         {[
-          ['Draft ID',     <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{draft.draft_id}</span>],
-          ['Entity',       draft.target_business_entity?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())],
-          ['Operation',    draft.operation],
-          ['Domain',       draft.business_domain],
-          ['Confidence',   draft.confidence != null ? `${Math.round(draft.confidence * 100)}%` : '—'],
-          ['Created',      draft.created_at ? new Date(draft.created_at).toLocaleString() : '—'],
+          ['Draft ID',   <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{draft.draft_id}</span>],
+          ['Entity',     draft.target_business_entity?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())],
+          ['Operation',  draft.operation],
+          ['Domain',     draft.business_domain],
+          ['Confidence', draft.confidence != null ? `${Math.round(draft.confidence * 100)}%` : '—'],
+          ['Created',    draft.created_at ? new Date(draft.created_at).toLocaleString() : '—'],
         ].map(([label, value]) => (
           <div key={label}>
             <div style={{ fontSize: 11, color: 'var(--color-text-muted)', fontWeight: 500, marginBottom: 2 }}>{label}</div>
@@ -250,15 +250,11 @@ export default function DraftReview() {
             <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>
               Review & Edit Extracted Data
             </div>
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              style={{
-                padding: '7px 16px', borderRadius: 7, fontSize: 12.5, fontWeight: 500,
-                border: '1px solid rgba(99,102,241,0.3)', background: 'rgba(99,102,241,0.12)',
-                color: '#818CF8', cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1,
-              }}
-            >
+            <button onClick={handleSave} disabled={saving} style={{
+              padding: '7px 16px', borderRadius: 7, fontSize: 12.5, fontWeight: 500,
+              border: '1px solid rgba(99,102,241,0.3)', background: 'rgba(99,102,241,0.12)',
+              color: '#818CF8', cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.7 : 1,
+            }}>
               {saving ? 'Saving...' : 'Save Changes'}
             </button>
           </div>
@@ -284,7 +280,7 @@ export default function DraftReview() {
         </div>
       )}
 
-      {/* Raw extracted data (read-only when no requirements or already reviewed) */}
+      {/* Raw extracted data (read-only) */}
       {(!hasRequirements || !isPending) && draft.extracted_data && Object.keys(draft.extracted_data).length > 0 && (
         <div style={{
           background: 'var(--color-bg-surface)', border: '1px solid var(--color-border)',
@@ -303,7 +299,7 @@ export default function DraftReview() {
         </div>
       )}
 
-      {/* Reviewer notes (shown if already reviewed) */}
+      {/* Reviewer notes (if already reviewed) */}
       {draft.review_notes && (
         <div style={{
           background: 'rgba(255,255,255,0.03)', border: '1px solid var(--color-border)',
@@ -350,42 +346,28 @@ export default function DraftReview() {
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
             {isPending && (
               <>
-                <button
-                  onClick={() => setShowRejectModal(true)}
-                  disabled={reviewing}
-                  style={{
-                    padding: '9px 20px', borderRadius: 8, fontSize: 13, fontWeight: 500,
-                    border: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.08)',
-                    color: '#EF4444', cursor: 'pointer', opacity: reviewing ? 0.7 : 1,
-                  }}
-                >Reject</button>
-                <button
-                  onClick={handleApprove}
-                  disabled={reviewing}
-                  style={{
-                    padding: '9px 24px', borderRadius: 8, fontSize: 13, fontWeight: 600,
-                    border: 'none', background: 'linear-gradient(135deg, #10B981, #059669)',
-                    color: '#fff', cursor: reviewing ? 'not-allowed' : 'pointer',
-                    opacity: reviewing ? 0.7 : 1,
-                    boxShadow: '0 0 14px rgba(16,185,129,0.25)',
-                  }}
-                >
+                <button onClick={() => setShowRejectModal(true)} disabled={reviewing} style={{
+                  padding: '9px 20px', borderRadius: 8, fontSize: 13, fontWeight: 500,
+                  border: '1px solid rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.08)',
+                  color: '#EF4444', cursor: 'pointer', opacity: reviewing ? 0.7 : 1,
+                }}>Reject</button>
+                <button onClick={handleApprove} disabled={reviewing} style={{
+                  padding: '9px 24px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                  border: 'none', background: 'linear-gradient(135deg, #10B981, #059669)',
+                  color: '#fff', cursor: reviewing ? 'not-allowed' : 'pointer', opacity: reviewing ? 0.7 : 1,
+                  boxShadow: '0 0 14px rgba(16,185,129,0.25)',
+                }}>
                   {reviewing ? 'Approving...' : '✓ Approve'}
                 </button>
               </>
             )}
             {isApproved && (
-              <button
-                onClick={handleImport}
-                disabled={importing}
-                style={{
-                  padding: '9px 28px', borderRadius: 8, fontSize: 13, fontWeight: 600,
-                  border: 'none', background: 'linear-gradient(135deg, #6366F1, #4F46E5)',
-                  color: '#fff', cursor: importing ? 'not-allowed' : 'pointer',
-                  opacity: importing ? 0.7 : 1,
-                  boxShadow: '0 0 16px rgba(99,102,241,0.3)',
-                }}
-              >
+              <button onClick={handleImport} disabled={importing} style={{
+                padding: '9px 28px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                border: 'none', background: 'linear-gradient(135deg, #6366F1, #4F46E5)',
+                color: '#fff', cursor: importing ? 'not-allowed' : 'pointer', opacity: importing ? 0.7 : 1,
+                boxShadow: '0 0 16px rgba(99,102,241,0.3)',
+              }}>
                 {importing ? 'Importing...' : '⬆ Import into System'}
               </button>
             )}
@@ -406,7 +388,7 @@ export default function DraftReview() {
         </div>
       )}
 
-      {/* Reject confirmation modal */}
+      {/* Reject modal */}
       {showRejectModal && (
         <div style={{
           position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
@@ -435,23 +417,16 @@ export default function DraftReview() {
               }}
             />
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => setShowRejectModal(false)}
-                style={{
-                  padding: '8px 18px', borderRadius: 8, fontSize: 13, fontWeight: 500,
-                  border: '1px solid var(--color-border)', background: 'transparent',
-                  color: 'var(--color-text-secondary)', cursor: 'pointer',
-                }}
-              >Cancel</button>
-              <button
-                onClick={handleReject}
-                disabled={reviewing}
-                style={{
-                  padding: '8px 20px', borderRadius: 8, fontSize: 13, fontWeight: 600,
-                  border: 'none', background: '#EF4444', color: '#fff',
-                  cursor: reviewing ? 'not-allowed' : 'pointer', opacity: reviewing ? 0.7 : 1,
-                }}
-              >
+              <button onClick={() => setShowRejectModal(false)} style={{
+                padding: '8px 18px', borderRadius: 8, fontSize: 13, fontWeight: 500,
+                border: '1px solid var(--color-border)', background: 'transparent',
+                color: 'var(--color-text-secondary)', cursor: 'pointer',
+              }}>Cancel</button>
+              <button onClick={handleReject} disabled={reviewing} style={{
+                padding: '8px 20px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                border: 'none', background: '#EF4444', color: '#fff',
+                cursor: reviewing ? 'not-allowed' : 'pointer', opacity: reviewing ? 0.7 : 1,
+              }}>
                 {reviewing ? 'Rejecting...' : 'Confirm Reject'}
               </button>
             </div>

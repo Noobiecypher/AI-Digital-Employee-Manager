@@ -41,39 +41,36 @@ export default function DataTable({ columns, data, loading, emptyMessage = 'No d
               </tr>
             ) : data.length === 0 ? (
               <tr>
-                <td colSpan={columns.length} style={{
-                  padding: 40, textAlign: 'center',
-                  color: 'var(--color-text-muted)', fontSize: 13,
-                }}>
+                <td colSpan={columns.length} style={{ padding: 40, textAlign: 'center', color: 'var(--color-text-muted)', fontSize: 13 }}>
                   {emptyMessage}
                 </td>
               </tr>
-            ) : (
-              data.map((row, i) => (
-                <tr
-                  key={row._id || row.candidate_id || row.employee_id || row.id || row.product_id || row.workflow_id || i}
-                  onClick={() => onRowClick?.(row)}
-                  style={{
-                    borderBottom: i < data.length - 1 ? '1px solid var(--color-border)' : 'none',
-                    cursor: onRowClick ? 'pointer' : 'default',
-                    transition: 'background 0.1s',
-                  }}
-                  onMouseEnter={e => { if (onRowClick) e.currentTarget.style.background = 'rgba(255,255,255,0.03)' }}
-                  onMouseLeave={e => { e.currentTarget.style.background = 'transparent' }}
-                >
-                  {columns.map(col => (
-                    <td key={col.key} style={{
-                      padding: '13px 16px',
-                      color: 'var(--color-text-primary)',
-                      textAlign: col.align || 'left',
-                      verticalAlign: 'middle',
-                    }}>
-                      {col.render ? col.render(row[col.key], row) : (row[col.key] ?? '—')}
-                    </td>
-                  ))}
-                </tr>
-              ))
-            )}
+            ) : data.map((row, i) => (
+              <tr
+                key={row._id || row.candidate_id || row.employee_id || row.product_id || row.workflow_id || row.role || i}
+                onClick={() => onRowClick?.(row)}
+                style={{
+                  borderBottom: '1px solid var(--color-border)',
+                  cursor: onRowClick ? 'pointer' : 'default',
+                  transition: 'background 0.1s',
+                }}
+                onMouseEnter={e => { if (onRowClick) e.currentTarget.style.background = 'var(--color-bg-surface-2)' }}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+              >
+                {columns.map(col => (
+                  <td key={col.key} style={{
+                    padding: '12px 16px',
+                    textAlign: col.align || 'left',
+                    color: 'var(--color-text-secondary)',
+                    verticalAlign: 'middle',
+                  }}>
+                    {col.render
+                      ? col.render(row[col.key], row)
+                      : row[col.key] ?? '—'}
+                  </td>
+                ))}
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>

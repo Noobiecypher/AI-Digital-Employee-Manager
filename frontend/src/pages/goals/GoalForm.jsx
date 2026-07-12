@@ -27,10 +27,10 @@ export default function GoalForm() {
   const [employees, setEmployees] = useState([])
   const [loading, setLoading]     = useState(false)
 
-  const [employeeName, setEmployeeName]   = useState('')
-  const [reviewPeriod, setReviewPeriod]   = useState('')
-  const [goalsText, setGoalsText]         = useState('')
-  const [goalsAchieved, setGoalsAchieved] = useState('')
+  const [employeeName, setEmployeeName] = useState('')
+  const [reviewPeriod, setReviewPeriod] = useState('')
+  const [goalsText, setGoalsText]       = useState('')
+  const [deadline, setDeadline]         = useState('')
 
   useEffect(() => {
     employeesApi.getAll()
@@ -48,21 +48,17 @@ export default function GoalForm() {
     }
 
     const goals_set = goalsText.split('\n').map(s => s.trim()).filter(Boolean)
-    const goals_achieved = goalsAchieved.split('\n').map(s => s.trim()).filter(Boolean)
-
-    // Only include achieved goals that exist in goals_set
-    const validAchieved = goals_achieved.filter(g => goals_set.includes(g))
 
     setLoading(true)
     try {
       await goalsApi.create({
-        employee_name:   employeeName,
-        review_period:   reviewPeriod,
+        employee_name: employeeName,
+        review_period: reviewPeriod,
         goals_set,
-        goals_achieved:  validAchieved,
-        status:          'active',
+        goals_achieved: [],
+        ...(deadline ? { deadline } : {}),
       })
-      toast.success('Goal created', `Goals set for ${employeeName}`)
+      toast.success('Goals assigned', `Goals set for ${employeeName}`)
       navigate('/goals')
     } catch (err) {
       toast.error('Failed to create', err.message)
@@ -82,7 +78,7 @@ export default function GoalForm() {
           cursor: 'pointer', color: 'var(--color-text-secondary)',
         }}>← Back</button>
         <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--color-text-primary)' }}>
-          Add Goals
+          Assign Goals
         </h2>
       </div>
 
@@ -91,41 +87,48 @@ export default function GoalForm() {
         borderRadius: 'var(--radius-xl)', padding: '28px 32px',
         display: 'flex', flexDirection: 'column', gap: 20,
       }}>
+
         {/* Employee */}
         <div>
           <label style={labelStyle}>Employee *</label>
-          <select
-            value={employeeName}
-            onChange={e => setEmployeeName(e.target.value)}
-            style={inputStyle}
-          >
+          <select value={employeeName} onChange={e => setEmployeeName(e.target.value)} style={inputStyle}>
             <option value="">Select employee...</option>
             {employees.map(emp => (
-              <option key={emp.employee_id || emp.name} value={emp.name}>
-                {emp.name} {emp.role ? `— ${emp.role}` : ''}
+              <option key={emp.employee_id || emp.employee_name} value={emp.employee_name}>
+                {emp.employee_name} {emp.role ? `— ${emp.role}` : ''}
               </option>
             ))}
           </select>
         </div>
 
-        {/* Review period */}
-        <div>
-          <label style={labelStyle}>Review Period *</label>
-          <select
-            value={reviewPeriod}
-            onChange={e => setReviewPeriod(e.target.value)}
-            style={inputStyle}
-          >
-            <option value="">Select period...</option>
-            {REVIEW_PERIODS.map(p => (
-              <option key={p} value={p}>{p}</option>
-            ))}
-          </select>
+        {/* Review period + Deadline side by side */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <div>
+            <label style={labelStyle}>Review Period *</label>
+            <select value={reviewPeriod} onChange={e => setReviewPeriod(e.target.value)} style={inputStyle}>
+              <option value="">Select period...</option>
+              {REVIEW_PERIODS.map(p => (
+                <option key={p} value={p}>{p}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label style={labelStyle}>Deadline <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span></label>
+            <input
+              type="date"
+              value={deadline}
+              onChange={e => setDeadline(e.target.value)}
+              min={new Date().toISOString().split('T')[0]}
+              style={inputStyle}
+            />
+          </div>
         </div>
 
         {/* Goals */}
         <div>
-          <label style={labelStyle}>Goals * <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(one per line)</span></label>
+          <label style={labelStyle}>
+            Goals * <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(one per line)</span>
+          </label>
           <textarea
             value={goalsText}
             onChange={e => setGoalsText(e.target.value)}
@@ -138,21 +141,6 @@ export default function GoalForm() {
               {goals_set.length} goal{goals_set.length !== 1 ? 's' : ''} entered
             </div>
           )}
-        </div>
-
-        {/* Goals achieved (optional) */}
-        <div>
-          <label style={labelStyle}>
-            Goals Already Achieved
-            <span style={{ fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}> (optional, one per line — must match above)</span>
-          </label>
-          <textarea
-            value={goalsAchieved}
-            onChange={e => setGoalsAchieved(e.target.value)}
-            placeholder="Complete API redesign"
-            rows={3}
-            style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.7, fontFamily: 'inherit' }}
-          />
         </div>
 
         {/* Actions */}
@@ -173,7 +161,7 @@ export default function GoalForm() {
               boxShadow: '0 0 16px rgba(99,102,241,0.25)',
             }}
           >
-            {loading ? 'Creating...' : 'Create Goals'}
+            {loading ? 'Assigning...' : 'Assign Goals'}
           </button>
         </div>
       </div>

@@ -28,13 +28,18 @@ import Notifications from './pages/Notifications'
 import Unauthorized from './pages/Unauthorized'
 import JobsPage from './pages/jobs/JobsPage'
 import ApplyPage from './pages/jobs/ApplyPage'
+import DocumentList from './pages/documents/DocumentList'
+import DocumentUpload from './pages/documents/DocumentUpload'
+import DocumentDetail from './pages/documents/DocumentDetail'
+import DraftList from './pages/documents/DraftList'
+import DraftReview from './pages/documents/DraftReview'
 
 export default function App() {
   return (
     <RoleProvider>
       <BrowserRouter>
         <Routes>
-          {/* Public routes — no auth required */}
+          {/* Public routes */}
           <Route path="/login" element={<Login />} />
           <Route path="/apply/:job_id" element={<ApplyPage />} />
 
@@ -49,47 +54,53 @@ export default function App() {
             <Route path="notifications" element={<Notifications />} />
             <Route path="unauthorized"  element={<Unauthorized />} />
 
-            {/* Goals — accessible to multiple roles */}
-            <Route path="goals"                                    element={<ProtectedRoute><GoalsDashboard /></ProtectedRoute>} />
-            <Route path="goals/new"                                element={<ProtectedRoute><GoalForm /></ProtectedRoute>} />
-            <Route path="goals/:employee_name/:period"             element={<ProtectedRoute><GoalDetail /></ProtectedRoute>} />
+            {/* Goals */}
+            <Route path="goals"                        element={<ProtectedRoute><GoalsDashboard /></ProtectedRoute>} />
+            <Route path="goals/new"                    element={<ProtectedRoute><GoalForm /></ProtectedRoute>} />
+            <Route path="goals/:employee_name/:period" element={<ProtectedRoute><GoalDetail /></ProtectedRoute>} />
 
-            {/* Employees — HR + Admin */}
+            {/* Employees */}
             <Route path="employees"          element={<ProtectedRoute><EmployeeList /></ProtectedRoute>} />
             <Route path="employees/new"      element={<ProtectedRoute><EmployeeForm /></ProtectedRoute>} />
             <Route path="employees/:id/edit" element={<ProtectedRoute><EmployeeForm /></ProtectedRoute>} />
 
-            {/* Candidates — HR, Manager, Admin */}
+            {/* Candidates */}
             <Route path="candidates"          element={<ProtectedRoute><CandidateList /></ProtectedRoute>} />
             <Route path="candidates/new"      element={<ProtectedRoute><CandidateForm /></ProtectedRoute>} />
             <Route path="candidates/:id"      element={<ProtectedRoute><CandidateDetail /></ProtectedRoute>} />
             <Route path="candidates/:id/edit" element={<ProtectedRoute><CandidateForm /></ProtectedRoute>} />
 
-            {/* Products — Manager, Admin */}
+            {/* Products */}
             <Route path="products"          element={<ProtectedRoute><ProductList /></ProtectedRoute>} />
             <Route path="products/new"      element={<ProtectedRoute><ProductForm /></ProtectedRoute>} />
             <Route path="products/:id/edit" element={<ProtectedRoute><ProductForm /></ProtectedRoute>} />
 
-            {/* Roles — Admin only per matrix, enforced via canAccess */}
+            {/* Roles */}
             <Route path="roles"          element={<ProtectedRoute><RoleList /></ProtectedRoute>} />
             <Route path="roles/new"      element={<ProtectedRoute><RoleForm /></ProtectedRoute>} />
             <Route path="roles/:id/edit" element={<ProtectedRoute><RoleForm /></ProtectedRoute>} />
 
-            {/* Workflows — HR, Manager, Admin */}
+            {/* Workflows */}
             <Route path="workflows"         element={<ProtectedRoute><WorkflowDashboard /></ProtectedRoute>} />
             <Route path="workflows/start"   element={<ProtectedRoute><StartWorkflow /></ProtectedRoute>} />
             <Route path="workflows/history" element={<ProtectedRoute><WorkflowHistory /></ProtectedRoute>} />
             <Route path="workflows/:id"     element={<ProtectedRoute><WorkflowDetail /></ProtectedRoute>} />
+            <Route path="approvals"         element={<ProtectedRoute><ApprovalDashboard /></ProtectedRoute>} />
 
-            <Route path="approvals" element={<ProtectedRoute><ApprovalDashboard /></ProtectedRoute>} />
-
-            {/* Reporting — Manager, Admin */}
+            {/* Reporting */}
             <Route path="reporting"         element={<ProtectedRoute><ReportingDashboard /></ProtectedRoute>} />
             <Route path="reporting/reports" element={<ProtectedRoute><ReportsView /></ProtectedRoute>} />
 
-            {/* Jobs — HR, Manager, Admin */}
+            {/* Jobs */}
             <Route path="jobs"         element={<ProtectedRoute><JobsPage /></ProtectedRoute>} />
             <Route path="jobs/:job_id" element={<ProtectedRoute><JobsPage /></ProtectedRoute>} />
+
+            {/* Documents — Admin, Manager, HR */}
+            <Route path="documents"               element={<ProtectedRoute><DocumentList /></ProtectedRoute>} />
+            <Route path="documents/upload"        element={<ProtectedRoute><DocumentUpload /></ProtectedRoute>} />
+            <Route path="documents/:id"           element={<ProtectedRoute><DocumentDetail /></ProtectedRoute>} />
+            <Route path="documents/drafts"        element={<ProtectedRoute><DraftList /></ProtectedRoute>} />
+            <Route path="documents/drafts/:id"    element={<ProtectedRoute><DraftReview /></ProtectedRoute>} />
           </Route>
         </Routes>
       </BrowserRouter>

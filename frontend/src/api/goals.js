@@ -1,12 +1,28 @@
 import { api } from './client'
-import { mockGoals } from '../mock/mockData'
 
 const BASE = '/api/goals'
 
 export const goalsApi = {
-  getAll:  ()                         => api.get(BASE).catch(() => mockGoals),
-  getOne:  (employeeName, period)     => api.get(`${BASE}/${employeeName}/${period}`).catch(() => mockGoals[0]),
-  create:  (data)                     => api.post(BASE, data).catch(() => ({ ...data })),
-  update:  (employeeName, period, data) => api.put(`${BASE}/${employeeName}/${period}`, data).catch(() => data),
-  delete:  (employeeName, period)     => api.delete(`${BASE}/${employeeName}/${period}`).catch(() => null),
+  getAll:  () => api.get(BASE),
+  getOne:  (employeeName, period) =>
+    api.get(`${BASE}/${encodeURIComponent(employeeName)}/${encodeURIComponent(period)}`),
+  create:  (data) => api.post(BASE, data),
+  update:  (employeeName, period, data) =>
+    api.put(`${BASE}/${encodeURIComponent(employeeName)}/${encodeURIComponent(period)}`, data),
+  delete:  (employeeName, period) =>
+    api.delete(`${BASE}/${encodeURIComponent(employeeName)}/${encodeURIComponent(period)}`),
+
+  // Employee: mark goals as achieved and submit for manager review
+  requestUpdate: (employeeName, period, goalsAchieved) =>
+    api.post(
+      `${BASE}/${encodeURIComponent(employeeName)}/${encodeURIComponent(period)}/request-update`,
+      { goals_achieved: goalsAchieved }
+    ),
+
+  // Manager: approve or reject submitted goals
+  review: (employeeName, period, approvalStatus, managerComments = null) =>
+    api.post(
+      `${BASE}/${encodeURIComponent(employeeName)}/${encodeURIComponent(period)}/review`,
+      { approval_status: approvalStatus, manager_comments: managerComments }
+    ),
 }

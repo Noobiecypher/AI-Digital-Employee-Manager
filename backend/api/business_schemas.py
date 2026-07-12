@@ -674,6 +674,11 @@ class GoalCreateRequest(BaseModel):
         ),
         examples=[["Complete FastAPI migration"]],
     )
+    deadline: str | None = Field(
+        default=None,
+        description="Optional deadline for this goal set, e.g. '2026-09-30'.",
+        examples=["2026-09-30"],
+    )
 
 
 class GoalUpdateRequest(BaseModel):
@@ -707,6 +712,11 @@ class GoalUpdateRequest(BaseModel):
             "Omit to leave unchanged. Pass [] to mark all as incomplete."
         ),
     )
+    deadline: str | None = Field(
+        default=None,
+        description="Optional deadline date string, e.g. '2026-09-30'.",
+    )
+
 
 class GoalAchievementUpdateRequest(BaseModel):
     """
@@ -775,6 +785,8 @@ class GoalResponse(BaseModel):
 
     manager_comments: str | None = None
 
+    deadline: str | None = None
+
 
 class GoalListResponse(BaseModel):
     """Flat list of all goal documents across all employees and periods."""
@@ -804,4 +816,4 @@ class GoalUpdateHistoryResponse(BaseModel):
 class GoalUpdateHistoryListResponse(BaseModel):
 
     total: int
-    items: list[GoalUpdateHistoryResponse]    
+    items: list[GoalUpdateHistoryResponse]
