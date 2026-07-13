@@ -11,6 +11,7 @@ import CandidateList from './pages/candidates/CandidateList'
 import CandidateDetail from './pages/candidates/CandidateDetail'
 import CandidateForm from './pages/candidates/CandidateForm'
 import ProductList from './pages/products/ProductList'
+import ProductDetail from './pages/products/ProductDetail'
 import ProductForm from './pages/products/ProductForm'
 import GoalsDashboard from './pages/goals/GoalsDashboard'
 import GoalDetail from './pages/goals/GoalDetail'
@@ -73,6 +74,7 @@ export default function App() {
             {/* Products */}
             <Route path="products"          element={<ProtectedRoute><ProductList /></ProtectedRoute>} />
             <Route path="products/new"      element={<ProtectedRoute><ProductForm /></ProtectedRoute>} />
+            <Route path="products/:id"      element={<ProtectedRoute><ProductDetail /></ProtectedRoute>} />
             <Route path="products/:id/edit" element={<ProtectedRoute><ProductForm /></ProtectedRoute>} />
 
             {/* Roles */}
@@ -95,12 +97,12 @@ export default function App() {
             <Route path="jobs"         element={<ProtectedRoute><JobsPage /></ProtectedRoute>} />
             <Route path="jobs/:job_id" element={<ProtectedRoute><JobsPage /></ProtectedRoute>} />
 
-            {/* Documents — Admin, Manager, HR */}
-            <Route path="documents"               element={<ProtectedRoute><DocumentList /></ProtectedRoute>} />
-            <Route path="documents/upload"        element={<ProtectedRoute><DocumentUpload /></ProtectedRoute>} />
-            <Route path="documents/:id"           element={<ProtectedRoute><DocumentDetail /></ProtectedRoute>} />
-            <Route path="documents/drafts"        element={<ProtectedRoute><DraftList /></ProtectedRoute>} />
-            <Route path="documents/drafts/:id"    element={<ProtectedRoute><DraftReview /></ProtectedRoute>} />
+            {/* Documents */}
+            <Route path="documents"            element={<ProtectedRoute><DocumentList /></ProtectedRoute>} />
+            <Route path="documents/upload"     element={<ProtectedRoute><DocumentUpload /></ProtectedRoute>} />
+            <Route path="documents/:id"        element={<ProtectedRoute><DocumentDetail /></ProtectedRoute>} />
+            <Route path="documents/drafts"     element={<ProtectedRoute><DraftList /></ProtectedRoute>} />
+            <Route path="documents/drafts/:id" element={<ProtectedRoute><DraftReview /></ProtectedRoute>} />
           </Route>
         </Routes>
       </BrowserRouter>

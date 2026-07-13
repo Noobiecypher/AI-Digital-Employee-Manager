@@ -8,6 +8,7 @@ from backend.api.routes import router
 from backend.api.business_routes import business_router
 from backend.api.auth_routes import auth_router
 from backend.api.document_routes import document_router
+from backend.api.notification_routes import notification_router
 from backend.database.mongo import close_client, get_client
 
 logger = logging.getLogger(__name__)
@@ -68,6 +69,12 @@ app.include_router(
     document_router,
     prefix="/documents",
     tags=["documents"],
+)
+
+app.include_router(
+    notification_router,
+    prefix="/api",
+    tags=["notifications"],
 )
 
 

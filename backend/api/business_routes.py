@@ -97,6 +97,7 @@ from backend.auth.ownership import (
 )
 
 from backend.database.business_data_repository import BusinessDataRepository
+from backend.api import notification_service as notif_svc
 from backend.api.business_schemas import (
     # Employees
     EmployeeCreateRequest,
@@ -923,21 +924,6 @@ async def list_goals(
             str(exc),
         )
     
-    if current_user["role"] == "employee":
-
-        goals = [
-            g
-            for g in goals
-            if (
-                g["employee_name"].lower()
-                ==
-                current_user.get(
-                    "employee_name",
-                    ""
-                ).lower()
-            )
-        ]
-
     return GoalListResponse(
         total=len(goals),
         items=[GoalResponse(**g) for g in goals],
@@ -1056,6 +1042,7 @@ async def create_goal(
             str(exc),
         )
 
+    notif_svc.notify_goal_assigned(body.employee_name, body.review_period)
     return GoalResponse(**goal)
 
 
@@ -1163,6 +1150,7 @@ async def request_goal_achievement_update(
             str(exc),
         )
 
+    notif_svc.notify_goal_submitted(employee_name, review_period)
     return GoalResponse(**goal)
 
 @business_router.post(
@@ -1215,6 +1203,10 @@ async def review_goal_update(
             str(exc),
         )
 
+    notif_svc.notify_goal_reviewed(
+        employee_name, review_period,
+        approved=body.approval_status == "approved"
+    )
     return GoalResponse(**goal)
 
 

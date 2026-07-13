@@ -61,7 +61,42 @@ from backend.api.schemas import (
     WorkflowListResponse,
 )
 
+from backend.api import notification_service as notif_svc
+
 router = APIRouter()
+
+async def _run_and_notify(workflow_id: str, objective_id: str):
+    """Wrapper around execute_workflow that fires completion/paused notifications."""
+    import asyncio
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, execute_workflow, workflow_id)
+    # Check final state and notify
+    try:
+        state = load_state(workflow_id)
+        if state.status == "completed":
+            notif_svc.notify_workflow_completed(workflow_id, objective_id)
+        elif state.status == "paused":
+            notif_svc.notify_workflow_paused(workflow_id, objective_id)
+        elif state.status == "failed":
+            notif_svc.notify_workflow_failed(workflow_id, objective_id)
+    except Exception:
+        pass
+
+async def _resume_and_notify(workflow_id: str, objective_id: str, approval_status: str, human_feedback, human_input_data):
+    """Wrapper around resume_workflow that fires completion notifications."""
+    import asyncio
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, resume_workflow, workflow_id, approval_status, human_feedback, human_input_data)
+    try:
+        state = load_state(workflow_id)
+        if state.status == "completed":
+            notif_svc.notify_workflow_completed(workflow_id, objective_id)
+        elif state.status == "paused":
+            notif_svc.notify_workflow_paused(workflow_id, objective_id)
+        elif state.status == "failed":
+            notif_svc.notify_workflow_failed(workflow_id, objective_id)
+    except Exception:
+        pass
 
 PARAMS_MODEL_MAP = {
     "hire_employee": HireEmployeeParams,
@@ -282,9 +317,12 @@ async def start_workflow_route(
 
 
     background_tasks.add_task(
-        execute_workflow,
+        _run_and_notify,
         state.workflow_id,
+        state.objective_id,
     )
+
+    notif_svc.notify_workflow_started(state.workflow_id, state.objective_id)
 
     return StartWorkflowResponse(
         workflow_id=state.workflow_id,
@@ -391,7 +429,7 @@ async def resume_workflow_route(
             body.human_feedback,
             body.human_input_data,
         )
-
+        notif_svc.notify_workflow_rejected(workflow_id, state.objective_id)
         return ResumeWorkflowResponse(
             workflow_id=workflow_id,
             objective_id=result.objective_id,
@@ -405,12 +443,14 @@ async def resume_workflow_route(
         )
 
     background_tasks.add_task(
-        resume_workflow,
+        _resume_and_notify,
         workflow_id,
+        state.objective_id,
         body.approval_status,
         body.human_feedback,
         body.human_input_data,
     )
+    notif_svc.notify_workflow_approved(workflow_id, state.objective_id)
 
     return ResumeWorkflowResponse(
         workflow_id=workflow_id,

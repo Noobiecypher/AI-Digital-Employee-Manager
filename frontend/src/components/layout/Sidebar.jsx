@@ -1,5 +1,7 @@
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useRole, canAccess } from '../../context/RoleContext'
+import { useState, useEffect, useRef } from 'react'
+import { notificationsApi } from '../../api/notifications'
 
 // SVG Icons
 function GridIcon()      { return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg> }
@@ -71,8 +73,28 @@ const ROLE_COLORS = {
 
 export default function Sidebar() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { role, userName, logout } = useRole()
   const roleColor = ROLE_COLORS[role] || '#6366F1'
+
+  const [unread, setUnread] = useState(0)
+  const intervalRef = useRef(null)
+
+  useEffect(() => {
+    const fetch = async () => {
+      try {
+        const res = await notificationsApi.getAll()
+        setUnread(res?.unread || 0)
+      } catch {}
+    }
+    fetch()
+    intervalRef.current = setInterval(fetch, 30000)
+    return () => clearInterval(intervalRef.current)
+  }, [])
+
+  useEffect(() => {
+    if (location.pathname === '/notifications') setUnread(0)
+  }, [location.pathname])
 
   // Filter nav sections/items based on what this role can actually access
   const nav = ALL_NAV
@@ -131,7 +153,13 @@ export default function Sidebar() {
               {group.section}
             </div>
             {group.items.map(item => (
-              <SidebarLink key={item.to} to={item.to} label={item.label} icon={item.icon} />
+              <SidebarLink
+                key={item.to}
+                to={item.to}
+                label={item.label}
+                icon={item.icon}
+                badge={item.to === '/notifications' ? unread : 0}
+              />
             ))}
           </div>
         ))}
@@ -159,7 +187,7 @@ export default function Sidebar() {
   )
 }
 
-function SidebarLink({ to, label, icon }) {
+function SidebarLink({ to, label, icon, badge = 0 }) {
   const location = useLocation()
   const isActive = location.pathname === to || (to !== '/dashboard' && location.pathname.startsWith(to))
 
@@ -174,12 +202,27 @@ function SidebarLink({ to, label, icon }) {
         background: isActive ? 'var(--color-primary-light)' : 'transparent',
         borderLeft: `2px solid ${isActive ? 'var(--color-primary)' : 'transparent'}`,
         transition: 'all 0.12s', textDecoration: 'none',
+        justifyContent: 'space-between',
       }}
       onMouseEnter={e => { if (!isActive) { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.color = 'var(--color-text-primary)' }}}
       onMouseLeave={e => { if (!isActive) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--color-text-sidebar)' }}}
     >
-      <span style={{ opacity: isActive ? 1 : 0.6, display: 'flex', alignItems: 'center' }}>{icon}</span>
-      {label}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+        <span style={{ opacity: isActive ? 1 : 0.6, display: 'flex', alignItems: 'center' }}>{icon}</span>
+        {label}
+      </div>
+      {badge > 0 && (
+        <span style={{
+          minWidth: 18, height: 18, borderRadius: 9,
+          background: '#EF4444', color: '#fff',
+          fontSize: 10, fontWeight: 700,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '0 4px', boxShadow: '0 0 6px rgba(239,68,68,0.5)',
+          lineHeight: 1, flexShrink: 0,
+        }}>
+          {badge > 99 ? '99+' : badge}
+        </span>
+      )}
     </NavLink>
   )
 }

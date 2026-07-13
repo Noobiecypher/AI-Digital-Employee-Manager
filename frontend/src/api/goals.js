@@ -4,6 +4,13 @@ const BASE = '/api/goals'
 
 export const goalsApi = {
   getAll:  () => api.get(BASE),
+  getForEmployee: (employeeName) =>
+    api.get(BASE).then(res => {
+      const arr = Array.isArray(res) ? res : res?.items || res?.goals || []
+      return arr.filter(g =>
+        g.employee_name?.toLowerCase() === employeeName?.toLowerCase()
+      )
+    }),
   getOne:  (employeeName, period) =>
     api.get(`${BASE}/${encodeURIComponent(employeeName)}/${encodeURIComponent(period)}`),
   create:  (data) => api.post(BASE, data),

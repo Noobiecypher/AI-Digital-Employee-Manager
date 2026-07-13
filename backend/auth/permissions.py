@@ -141,6 +141,8 @@ ROLE_PERMISSIONS: dict[SystemRole, frozenset[Permission]] = {
         Permission.CANDIDATES_DELETE,
 
         Permission.PRODUCTS_READ,
+        Permission.PRODUCTS_CREATE,
+        Permission.PRODUCTS_UPDATE,
 
         Permission.GOALS_READ,
         Permission.GOALS_CREATE,
